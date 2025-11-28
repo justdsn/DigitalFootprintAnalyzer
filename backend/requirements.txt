@@ -1,0 +1,34 @@
+# =============================================================================
+# DIGITAL FOOTPRINT ANALYZER - BACKEND DEPENDENCIES
+# =============================================================================
+# Python dependencies for the FastAPI backend application.
+# Install with: pip install -r requirements.txt
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Web Framework
+# -----------------------------------------------------------------------------
+fastapi>=0.109.0          # Modern async web framework
+uvicorn[standard]>=0.27.0 # ASGI server for FastAPI
+pydantic>=2.5.0           # Data validation and settings management
+pydantic-settings>=2.1.0  # Pydantic settings support
+
+# -----------------------------------------------------------------------------
+# NLP and Text Processing
+# -----------------------------------------------------------------------------
+spacy>=3.7.0              # NLP library for NER
+# Note: Install spaCy model separately:
+# python -m spacy download en_core_web_sm
+
+# -----------------------------------------------------------------------------
+# Development & Testing
+# -----------------------------------------------------------------------------
+pytest>=7.4.0             # Testing framework
+pytest-asyncio>=0.23.0    # Async test support
+httpx>=0.26.0             # Async HTTP client for testing
+
+# -----------------------------------------------------------------------------
+# Utilities
+# -----------------------------------------------------------------------------
+python-multipart>=0.0.6   # Form data parsing
+python-dotenv>=1.0.0      # Environment variable loading

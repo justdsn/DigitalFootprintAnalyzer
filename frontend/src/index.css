@@ -1,0 +1,236 @@
+/* =============================================================================
+ * MAIN CSS FILE
+ * =============================================================================
+ * Global styles and Tailwind CSS directives.
+ * Includes custom component styles and utility classes.
+ * ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+ * Tailwind CSS Directives
+ * ----------------------------------------------------------------------------- */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* -----------------------------------------------------------------------------
+ * Base Layer - Global Styles
+ * ----------------------------------------------------------------------------- */
+@layer base {
+  /* Default body styling */
+  body {
+    @apply bg-gray-50 text-gray-900 font-sans antialiased;
+  }
+
+  /* Smooth scrolling for the entire page */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Default heading styles */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-semibold text-gray-900;
+  }
+
+  /* Default link styles */
+  a {
+    @apply text-primary-600 hover:text-primary-700 transition-colors;
+  }
+
+  /* Focus styles for accessibility */
+  *:focus-visible {
+    @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Component Layer - Reusable Components
+ * ----------------------------------------------------------------------------- */
+@layer components {
+  /* ---------------------------------------------------------------------------
+   * Button Components
+   * --------------------------------------------------------------------------- */
+  
+  /* Primary button */
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-6 py-3 
+           bg-primary-600 text-white font-medium rounded-lg
+           hover:bg-primary-700 active:bg-primary-800
+           transition-all duration-200 ease-in-out
+           shadow-sm hover:shadow-md
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Secondary button */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center px-6 py-3
+           bg-white text-primary-600 font-medium rounded-lg
+           border-2 border-primary-600
+           hover:bg-primary-50 active:bg-primary-100
+           transition-all duration-200 ease-in-out;
+  }
+
+  /* Accent button */
+  .btn-accent {
+    @apply inline-flex items-center justify-center px-6 py-3
+           bg-accent-500 text-white font-medium rounded-lg
+           hover:bg-accent-600 active:bg-accent-700
+           transition-all duration-200 ease-in-out
+           shadow-sm hover:shadow-md;
+  }
+
+  /* ---------------------------------------------------------------------------
+   * Card Components
+   * --------------------------------------------------------------------------- */
+  
+  /* Standard card */
+  .card {
+    @apply bg-white rounded-xl shadow-card p-6
+           border border-gray-100
+           transition-shadow duration-200
+           hover:shadow-lg;
+  }
+
+  /* Feature card */
+  .feature-card {
+    @apply bg-white rounded-xl shadow-soft p-8
+           border border-gray-100
+           transition-all duration-300
+           hover:shadow-lg hover:-translate-y-1;
+  }
+
+  /* ---------------------------------------------------------------------------
+   * Form Components
+   * --------------------------------------------------------------------------- */
+  
+  /* Input field */
+  .form-input {
+    @apply w-full px-4 py-3 rounded-lg
+           border border-gray-300
+           bg-white text-gray-900
+           placeholder-gray-400
+           focus:border-primary-500 focus:ring-2 focus:ring-primary-200
+           transition-all duration-200;
+  }
+
+  /* Form label */
+  .form-label {
+    @apply block text-sm font-medium text-gray-700 mb-2;
+  }
+
+  /* ---------------------------------------------------------------------------
+   * Risk Level Indicators
+   * --------------------------------------------------------------------------- */
+  
+  .risk-low {
+    @apply text-risk-low bg-green-100;
+  }
+
+  .risk-medium {
+    @apply text-risk-medium bg-amber-100;
+  }
+
+  .risk-high {
+    @apply text-risk-high bg-red-100;
+  }
+
+  /* ---------------------------------------------------------------------------
+   * Navigation Components
+   * --------------------------------------------------------------------------- */
+  
+  .nav-link {
+    @apply text-gray-600 hover:text-primary-600 
+           font-medium transition-colors duration-200;
+  }
+
+  .nav-link-active {
+    @apply text-primary-600 font-semibold;
+  }
+
+  /* ---------------------------------------------------------------------------
+   * Platform Icon Colors
+   * --------------------------------------------------------------------------- */
+  
+  .platform-facebook {
+    @apply text-blue-600 hover:text-blue-700;
+  }
+
+  .platform-instagram {
+    @apply text-pink-600 hover:text-pink-700;
+  }
+
+  .platform-twitter {
+    @apply text-sky-500 hover:text-sky-600;
+  }
+
+  .platform-linkedin {
+    @apply text-blue-700 hover:text-blue-800;
+  }
+
+  .platform-tiktok {
+    @apply text-gray-900 hover:text-gray-700;
+  }
+
+  .platform-youtube {
+    @apply text-red-600 hover:text-red-700;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Utility Layer - Custom Utilities
+ * ----------------------------------------------------------------------------- */
+@layer utilities {
+  /* Text gradient utility */
+  .text-gradient {
+    @apply bg-clip-text text-transparent 
+           bg-gradient-to-r from-primary-600 to-accent-500;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Animation delay utilities */
+  .animation-delay-200 {
+    animation-delay: 200ms;
+  }
+  .animation-delay-400 {
+    animation-delay: 400ms;
+  }
+  .animation-delay-600 {
+    animation-delay: 600ms;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+ * Custom Animations
+ * ----------------------------------------------------------------------------- */
+
+/* Loading spinner animation */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin 3s linear infinite;
+}
+
+/* Pulse animation for loading states */
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.33);
+  }
+  80%, 100% {
+    opacity: 0;
+  }
+}
+
+.animate-pulse-ring {
+  animation: pulse-ring 1.25s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
