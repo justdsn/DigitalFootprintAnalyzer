@@ -1,2 +1,1 @@
-# DigitalFootprintAnalyzer
-RP
+# DigitalFootprintAnalyzer [RP]
