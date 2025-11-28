@@ -24,7 +24,7 @@ Example .env file:
     SPACY_MODEL=en_core_web_sm
 """
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import List
 import os
 
@@ -138,11 +138,11 @@ class Settings(BaseSettings):
         "SriLankan Airlines"
     ]
     
-    class Config:
-        """Pydantic configuration for settings."""
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = True
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True
+    )
 
 
 # =============================================================================

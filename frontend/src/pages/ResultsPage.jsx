@@ -257,8 +257,8 @@ function ResultsPage() {
           >
             {results.variations.length > 0 ? (
               <div className="flex flex-wrap gap-2">
-                {results.variations.slice(0, 20).map((variation, index) => (
-                  <ResultBadge key={index} variant={variation === results.username ? 'primary' : 'default'}>
+                {results.variations.slice(0, 20).map((variation) => (
+                  <ResultBadge key={variation} variant={variation === results.username ? 'primary' : 'default'}>
                     {variation}
                   </ResultBadge>
                 ))}

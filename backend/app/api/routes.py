@@ -20,6 +20,10 @@ Each endpoint includes comprehensive error handling and validation.
 from fastapi import APIRouter, HTTPException, status
 from typing import Dict, Any
 import time
+import logging
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 # Import request/response schemas
 from app.models.schemas import (
@@ -238,7 +242,7 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         raise
     except Exception as e:
         # Log the error (in production, use proper logging)
-        print(f"Error in analyze endpoint: {str(e)}")
+        logger.error(f"Error in analyze endpoint: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred during analysis: {str(e)}"
@@ -300,7 +304,7 @@ async def extract_pii(request: PIIExtractRequest) -> PIIExtractResponse:
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error in extract_pii endpoint: {str(e)}")
+        logger.error(f"Error in extract_pii endpoint: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred during PII extraction: {str(e)}"
@@ -364,7 +368,7 @@ async def analyze_username(request: UsernameAnalyzeRequest) -> UsernameAnalyzeRe
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error in analyze_username endpoint: {str(e)}")
+        logger.error(f"Error in analyze_username endpoint: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred during username analysis: {str(e)}"

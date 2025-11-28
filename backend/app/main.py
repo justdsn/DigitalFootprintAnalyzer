@@ -19,6 +19,11 @@ This module initializes the FastAPI application with:
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Import API routes
 from app.api.routes import router as api_router
@@ -49,14 +54,14 @@ async def lifespan(app: FastAPI):
         app: FastAPI application instance
     """
     # Startup: Preload NLP model for faster first requests
-    print("🚀 Starting Digital Footprint Analyzer...")
+    logger.info("🚀 Starting Digital Footprint Analyzer...")
     preload_nlp_model()
-    print("✅ NLP model loaded successfully")
+    logger.info("✅ NLP model loaded successfully")
     
     yield  # Application is running
     
     # Shutdown: Cleanup (if needed)
-    print("👋 Shutting down Digital Footprint Analyzer...")
+    logger.info("👋 Shutting down Digital Footprint Analyzer...")
 
 
 # =============================================================================
