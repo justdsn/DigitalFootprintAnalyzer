@@ -348,4 +348,4 @@ This tool is designed for personal privacy awareness and educational purposes. I
 
 ---
 
-<p align="center">Made with ❤️ for Sri Lankans</p>
+<p align="center">🇱🇰</p>
