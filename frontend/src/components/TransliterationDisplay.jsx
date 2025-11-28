@@ -27,6 +27,13 @@ import React, { useState } from 'react';
 import { useLanguage } from '../context/LanguageContext';
 
 // =============================================================================
+// CONSTANTS
+// =============================================================================
+
+// Number of variants to display before "Show more" button
+const INITIAL_VARIANTS_DISPLAY_COUNT = 3;
+
+// =============================================================================
 // TRANSLITERATION DISPLAY COMPONENT
 // =============================================================================
 
@@ -83,8 +90,8 @@ function TransliterationDisplay({
 
   // Combine all results for display
   const allResults = [...(transliterations || []), ...(variants || [])];
-  const displayVariants = showAllVariants ? allResults : allResults.slice(0, 3);
-  const hasMoreVariants = allResults.length > 3;
+  const displayVariants = showAllVariants ? allResults : allResults.slice(0, INITIAL_VARIANTS_DISPLAY_COUNT);
+  const hasMoreVariants = allResults.length > INITIAL_VARIANTS_DISPLAY_COUNT;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -212,7 +219,7 @@ function TransliterationDisplay({
               <span>
                 {showAllVariants 
                   ? (t('transliteration.showLess') || 'Show less')
-                  : `${t('transliteration.showMore') || 'Show'} ${allResults.length - 3} ${t('transliteration.moreVariants') || 'more variants'}`
+                  : `${t('transliteration.showMore') || 'Show'} ${allResults.length - INITIAL_VARIANTS_DISPLAY_COUNT} ${t('transliteration.moreVariants') || 'more variants'}`
                 }
               </span>
               <svg 

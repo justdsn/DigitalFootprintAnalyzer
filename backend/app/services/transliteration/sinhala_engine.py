@@ -52,6 +52,17 @@ from .location_dictionary import LOCATION_DICTIONARY, get_location_variants
 
 
 # =============================================================================
+# CONSTANTS
+# =============================================================================
+
+# Maximum number of spelling variants to generate
+MAX_VARIANTS = 10
+
+# Maximum variants per word when combining multi-word phrases
+MAX_VARIANTS_PER_WORD = 3
+
+
+# =============================================================================
 # SINHALA TRANSLITERATOR CLASS
 # =============================================================================
 
@@ -129,11 +140,11 @@ class SinhalaTransliterator:
         if not text:
             return False
         
-        for char in text:
-            code_point = ord(char)
-            if SINHALA_UNICODE_START <= code_point <= SINHALA_UNICODE_END:
-                return True
-        return False
+        # Use any() for early return on first Sinhala character found
+        return any(
+            SINHALA_UNICODE_START <= ord(char) <= SINHALA_UNICODE_END
+            for char in text
+        )
     
     def get_sinhala_ratio(self, text: str) -> float:
         """
@@ -278,9 +289,8 @@ class SinhalaTransliterator:
             return word_variants[0]
         
         # Limit variants per word to avoid combinatorial explosion
-        max_variants_per_word = 3
         limited_variants = [
-            variants[:max_variants_per_word] for variants in word_variants
+            variants[:MAX_VARIANTS_PER_WORD] for variants in word_variants
         ]
         
         # Build combinations
@@ -430,7 +440,7 @@ class SinhalaTransliterator:
         # Limit number of variants
         result = list(variants)
         result.sort(key=len)
-        return result[:10]  # Limit to 10 variants
+        return result[:MAX_VARIANTS]
     
     # =========================================================================
     # UTILITY METHODS

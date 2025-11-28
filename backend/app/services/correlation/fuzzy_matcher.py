@@ -34,6 +34,18 @@ except ImportError:
 
 
 # =============================================================================
+# CONSTANTS
+# =============================================================================
+
+# Typosquatting detection thresholds
+TYPOSQUATTING_MIN_SCORE = 70  # Min similarity with known technique
+TYPOSQUATTING_HIGH_SIMILARITY = 85  # High similarity without technique
+
+# Default similarity thresholds
+DEFAULT_FIND_SIMILAR_THRESHOLD = 70.0
+
+
+# =============================================================================
 # FUZZY MATCHER CLASS
 # =============================================================================
 
@@ -327,8 +339,8 @@ class FuzzyMatcher:
         # Determine if likely typosquatting
         # High similarity + known techniques = likely typosquat
         is_typosquat = bool(
-            (score >= 70 and len(techniques) > 0) or
-            (score >= 85)  # Very similar even without known technique
+            (score >= TYPOSQUATTING_MIN_SCORE and len(techniques) > 0) or
+            (score >= TYPOSQUATTING_HIGH_SIMILARITY)  # Very similar even without known technique
         )
         
         return (is_typosquat, score, techniques)
@@ -341,7 +353,7 @@ class FuzzyMatcher:
         self,
         target: str,
         candidates: List[str],
-        threshold: float = 70.0,
+        threshold: float = DEFAULT_FIND_SIMILAR_THRESHOLD,
         limit: int = 10
     ) -> List[Tuple[str, float]]:
         """

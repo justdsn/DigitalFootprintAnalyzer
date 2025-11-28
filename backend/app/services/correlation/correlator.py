@@ -31,6 +31,19 @@ from .fuzzy_matcher import FuzzyMatcher
 
 
 # =============================================================================
+# CONSTANTS
+# =============================================================================
+
+# Maximum impersonation score
+MAX_IMPERSONATION_SCORE = 100
+
+# Risk level score thresholds
+SCORE_THRESHOLD_CRITICAL = 70
+SCORE_THRESHOLD_HIGH = 50
+SCORE_THRESHOLD_MEDIUM = 30
+
+
+# =============================================================================
 # DATA CLASSES
 # =============================================================================
 
@@ -550,8 +563,8 @@ class CrossPlatformCorrelator:
                 if is_typo and techniques:
                     score += 30
         
-        # Cap score at 100
-        return min(score, 100)
+        # Cap score at maximum
+        return min(score, MAX_IMPERSONATION_SCORE)
     
     def _score_to_level(self, score: int) -> str:
         """
@@ -563,11 +576,11 @@ class CrossPlatformCorrelator:
         Returns:
             str: Risk level (low/medium/high/critical)
         """
-        if score >= 70:
+        if score >= SCORE_THRESHOLD_CRITICAL:
             return "critical"
-        elif score >= 50:
+        elif score >= SCORE_THRESHOLD_HIGH:
             return "high"
-        elif score >= 30:
+        elif score >= SCORE_THRESHOLD_MEDIUM:
             return "medium"
         else:
             return "low"
