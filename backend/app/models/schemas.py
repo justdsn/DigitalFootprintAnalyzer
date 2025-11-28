@@ -430,3 +430,276 @@ class UsernameAnalyzeResponse(BaseModel):
         ...,
         description="Username pattern analysis results"
     )
+
+
+# =============================================================================
+# TRANSLITERATION MODELS
+# =============================================================================
+
+class TransliterateRequest(BaseModel):
+    """
+    Request model for transliteration endpoint.
+    
+    Attributes:
+        text: Sinhala text to transliterate
+    
+    Example:
+        {
+            "text": "දුෂාන්"
+        }
+    """
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Sinhala text to transliterate to English",
+        examples=["දුෂාන්", "කොළඹ", "පෙරේරා"]
+    )
+    
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, v: str) -> str:
+        """Validate that text is not empty."""
+        if not v or not v.strip():
+            raise ValueError("Text cannot be empty")
+        return v.strip()
+
+
+class TransliterateResponse(BaseModel):
+    """
+    Response model for transliteration endpoint.
+    
+    Attributes:
+        original: Original input text
+        transliterations: List of romanized spelling variants
+        is_sinhala: Whether the input was detected as Sinhala
+    
+    Example:
+        {
+            "original": "දුෂාන්",
+            "transliterations": ["dushan", "dushaan", "dusan"],
+            "is_sinhala": true
+        }
+    """
+    original: str = Field(
+        ...,
+        description="Original input text"
+    )
+    transliterations: List[str] = Field(
+        ...,
+        description="List of romanized transliterations"
+    )
+    is_sinhala: bool = Field(
+        ...,
+        description="Whether the input text was detected as Sinhala"
+    )
+
+
+# =============================================================================
+# CORRELATION MODELS
+# =============================================================================
+
+class ProfileInput(BaseModel):
+    """
+    Model for a single social media profile input.
+    
+    Attributes:
+        platform: Social media platform name
+        username: Profile username/handle
+        name: Display name (optional)
+        bio: Profile bio (optional)
+        location: Stated location (optional)
+        email: Public email (optional)
+        phone: Public phone (optional)
+    
+    Example:
+        {
+            "platform": "facebook",
+            "username": "john_doe",
+            "name": "John Doe",
+            "bio": "Developer from Colombo",
+            "location": "Colombo, Sri Lanka"
+        }
+    """
+    platform: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Social media platform name",
+        examples=["facebook", "instagram", "twitter", "linkedin"]
+    )
+    username: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Profile username/handle",
+        examples=["john_doe", "johndoe"]
+    )
+    name: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="Display name or real name"
+    )
+    bio: Optional[str] = Field(
+        None,
+        max_length=1000,
+        description="Profile bio/description"
+    )
+    location: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="Stated location"
+    )
+    email: Optional[str] = Field(
+        None,
+        max_length=200,
+        description="Public email address"
+    )
+    phone: Optional[str] = Field(
+        None,
+        max_length=50,
+        description="Public phone number"
+    )
+
+
+class CorrelateRequest(BaseModel):
+    """
+    Request model for correlation endpoint.
+    
+    Attributes:
+        profiles: List of profiles to correlate
+    
+    Example:
+        {
+            "profiles": [
+                {"platform": "facebook", "username": "john_doe", "name": "John"},
+                {"platform": "instagram", "username": "johndoe", "name": "John D"}
+            ]
+        }
+    """
+    profiles: List[ProfileInput] = Field(
+        ...,
+        min_length=1,
+        max_length=10,
+        description="List of social media profiles to correlate"
+    )
+    
+    @field_validator("profiles")
+    @classmethod
+    def validate_profiles(cls, v: List[ProfileInput]) -> List[ProfileInput]:
+        """Validate that at least one profile is provided."""
+        if not v:
+            raise ValueError("At least one profile is required")
+        return v
+
+
+class OverlapResult(BaseModel):
+    """
+    Model for an overlap (shared information) result.
+    
+    Attributes:
+        field: The PII field that overlaps
+        platforms: List of platforms where overlap was found
+        values: The matching values from each platform
+        match_score: Similarity score (0.0 to 1.0)
+        description: Human-readable description
+    """
+    field: str = Field(
+        ...,
+        description="The PII field that overlaps"
+    )
+    platforms: List[str] = Field(
+        ...,
+        description="Platforms where the overlap was found"
+    )
+    values: List[str] = Field(
+        ...,
+        description="The matching values"
+    )
+    match_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Similarity score (0.0 to 1.0)"
+    )
+    description: str = Field(
+        ...,
+        description="Human-readable description of the overlap"
+    )
+
+
+class ContradictionResult(BaseModel):
+    """
+    Model for a contradiction (conflicting information) result.
+    
+    Attributes:
+        field: The PII field that contradicts
+        platforms: The platforms with conflicting info
+        values: The conflicting values
+        severity: Severity level (low/medium/high)
+        description: Human-readable description
+    """
+    field: str = Field(
+        ...,
+        description="The PII field that contradicts"
+    )
+    platforms: List[str] = Field(
+        ...,
+        description="Platforms with conflicting information"
+    )
+    values: List[str] = Field(
+        ...,
+        description="The conflicting values"
+    )
+    severity: str = Field(
+        ...,
+        description="Severity level (low/medium/high)"
+    )
+    description: str = Field(
+        ...,
+        description="Human-readable description of the contradiction"
+    )
+
+
+class CorrelateResponse(BaseModel):
+    """
+    Response model for correlation endpoint.
+    
+    Attributes:
+        overlaps: List of detected overlaps
+        contradictions: List of detected contradictions
+        impersonation_score: Risk score (0-100)
+        risk_level: Risk level classification
+        analysis_details: Additional analysis information
+    
+    Example:
+        {
+            "overlaps": [...],
+            "contradictions": [],
+            "impersonation_score": 45,
+            "risk_level": "medium",
+            "analysis_details": {...}
+        }
+    """
+    overlaps: List[OverlapResult] = Field(
+        ...,
+        description="Detected information overlaps"
+    )
+    contradictions: List[ContradictionResult] = Field(
+        ...,
+        description="Detected information contradictions"
+    )
+    impersonation_score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Impersonation risk score (0-100)"
+    )
+    risk_level: str = Field(
+        ...,
+        description="Risk level (low/medium/high/critical)"
+    )
+    analysis_details: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional analysis details"
+    )

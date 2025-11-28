@@ -184,5 +184,55 @@
     "learnMore": "Learn More",
     "characters": "characters",
     "milliseconds": "ms"
+  },
+  "transliteration": {
+    "title": "Transliteration",
+    "sinhalaDetected": "Sinhala text detected",
+    "variants": "Spelling variants",
+    "original": "Original Sinhala",
+    "romanized": "Romanized",
+    "input": "Input",
+    "alternativeSpellings": "Alternative Spellings",
+    "note": "Multiple spellings are common for Sri Lankan names. Try searching with these variants."
+  },
+  "correlation": {
+    "title": "Cross-Platform Comparison",
+    "subtitle": "Analyzing profiles across platforms",
+    "profilesCompared": "Profiles Compared",
+    "overlaps": "Matching Information",
+    "contradictions": "Conflicting Information",
+    "noMatches": "No significant matches or conflicts found"
+  },
+  "impersonation": {
+    "title": "Impersonation Risk Assessment",
+    "score": "Risk Score",
+    "scaleLow": "Low",
+    "scaleHigh": "High",
+    "levels": {
+      "low": "Low Risk",
+      "medium": "Medium Risk",
+      "high": "High Risk",
+      "critical": "Critical Risk"
+    },
+    "descriptions": {
+      "low": "Profiles appear consistent. No significant impersonation indicators detected.",
+      "medium": "Some inconsistencies detected. Review the comparison details below.",
+      "high": "Significant inconsistencies found. Possible impersonation risk.",
+      "critical": "High likelihood of impersonation. Immediate attention recommended."
+    },
+    "factors": {
+      "typosquatting": "Typosquatting Detected",
+      "nameMismatch": "Name Mismatch",
+      "locationMismatch": "Location Mismatch",
+      "emailMismatch": "Email Mismatch",
+      "bioSimilarity": "Suspicious Bio Similarity"
+    },
+    "factorsTitle": "Detected Risk Factors",
+    "recommendations": "Recommended Actions",
+    "actions": {
+      "verify": "Verify the authenticity of these profiles",
+      "report": "Report suspicious accounts to the platform",
+      "monitor": "Monitor these profiles for further activity"
+    }
   }
 }
