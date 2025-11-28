@@ -34,13 +34,20 @@ from app.models.schemas import (
     UsernameAnalyzeRequest,
     UsernameAnalyzeResponse,
     HealthResponse,
-    IdentifierType
+    IdentifierType,
+    TransliterateRequest,
+    TransliterateResponse,
+    CorrelationRequest,
+    CorrelationResponse,
+    PlatformProfile,
 )
 
 # Import services
 from app.services.pii_extractor import PIIExtractor
 from app.services.ner_engine import NEREngine
 from app.services.username_analyzer import UsernameAnalyzer
+from app.services.transliteration import SinhalaTransliterator
+from app.services.correlation import CrossPlatformCorrelator
 
 
 # =============================================================================
@@ -54,6 +61,8 @@ router = APIRouter()
 pii_extractor = PIIExtractor()
 ner_engine = NEREngine()
 username_analyzer = UsernameAnalyzer()
+sinhala_transliterator = SinhalaTransliterator()
+cross_platform_correlator = CrossPlatformCorrelator()
 
 
 # =============================================================================
@@ -90,7 +99,9 @@ async def health_check() -> HealthResponse:
         services={
             "pii_extractor": "operational",
             "ner_engine": "operational",
-            "username_analyzer": "operational"
+            "username_analyzer": "operational",
+            "sinhala_transliterator": "operational",
+            "cross_platform_correlator": "operational"
         }
     )
 
@@ -585,3 +596,179 @@ def generate_recommendations(
     )
     
     return recommendations
+
+
+# =============================================================================
+# TRANSLITERATION ENDPOINT (Phase 2)
+# =============================================================================
+
+@router.post(
+    "/transliterate",
+    response_model=TransliterateResponse,
+    summary="Transliterate Sinhala Text",
+    description="""
+    Transliterate Sinhala text to romanized English variants.
+    
+    This endpoint:
+    - Detects if the input contains Sinhala characters
+    - Converts Sinhala text to romanized English
+    - Generates spelling variants for fuzzy matching
+    - Supports names and locations from Sri Lankan context
+    """
+)
+async def transliterate(request: TransliterateRequest) -> TransliterateResponse:
+    """
+    Transliterate Sinhala text to English variants.
+    
+    The transliteration engine:
+    1. Detects Sinhala Unicode characters (U+0D80-U+0DFF)
+    2. Looks up known names and locations in dictionaries
+    3. Performs character-by-character transliteration for unknown words
+    4. Generates spelling variants based on common romanization patterns
+    
+    Args:
+        request: TransliterateRequest containing Sinhala text
+    
+    Returns:
+        TransliterateResponse: Original text, detection result, and transliterations
+    
+    Raises:
+        HTTPException: 400 if text is empty
+        HTTPException: 500 for internal processing errors
+    
+    Example:
+        Input: {"text": "සුනිල් පෙරේරා", "include_variants": true}
+        Output: {
+            "original": "සුනිල් පෙරේරා",
+            "is_sinhala": true,
+            "transliterations": ["sunil perera"],
+            "variants": ["suneel perera", "sunil pereera", ...]
+        }
+    """
+    try:
+        if not request.text or not request.text.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Text is required and cannot be empty"
+            )
+        
+        text = request.text.strip()
+        
+        # Check if text contains Sinhala
+        is_sinhala = sinhala_transliterator.is_sinhala(text)
+        
+        # Perform transliteration
+        transliterations = sinhala_transliterator.transliterate(text)
+        
+        # Separate primary transliterations from variants
+        if transliterations:
+            primary = transliterations[:1]  # First result is primary
+            variants = transliterations[1:] if request.include_variants else []
+        else:
+            primary = [text.lower()] if not is_sinhala else []
+            variants = []
+        
+        return TransliterateResponse(
+            original=text,
+            is_sinhala=is_sinhala,
+            transliterations=primary,
+            variants=variants
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in transliterate endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during transliteration: {str(e)}"
+        )
+
+
+# =============================================================================
+# CORRELATION ENDPOINT (Phase 2)
+# =============================================================================
+
+@router.post(
+    "/correlate",
+    response_model=CorrelationResponse,
+    summary="Correlate Profiles Across Platforms",
+    description="""
+    Correlate profiles from multiple social media platforms to detect
+    impersonation and analyze digital footprint consistency.
+    
+    This endpoint:
+    - Compares profile information across platforms
+    - Identifies matching information (overlaps)
+    - Detects conflicting information (contradictions)
+    - Calculates impersonation risk score
+    - Provides warning flags and recommendations
+    """
+)
+async def correlate_profiles(request: CorrelationRequest) -> CorrelationResponse:
+    """
+    Correlate profiles across platforms for impersonation detection.
+    
+    The correlation engine:
+    1. Compares usernames using fuzzy matching for typosquatting detection
+    2. Compares names, bios, locations, and contact information
+    3. Identifies overlaps (matching info) and contradictions (conflicting info)
+    4. Calculates an impersonation risk score based on findings
+    5. Generates warning flags and actionable recommendations
+    
+    Args:
+        request: CorrelationRequest containing list of platform profiles
+    
+    Returns:
+        CorrelationResponse: Complete correlation analysis results
+    
+    Raises:
+        HTTPException: 400 if fewer than 2 profiles provided
+        HTTPException: 500 for internal processing errors
+    
+    Example:
+        Input: {
+            "profiles": [
+                {"platform": "facebook", "username": "john_doe", "name": "John Doe"},
+                {"platform": "twitter", "username": "johndoe", "name": "John Doe"}
+            ]
+        }
+        Output: {
+            "overlaps": [...],
+            "contradictions": [...],
+            "impersonation_score": 15,
+            "impersonation_level": "low",
+            "flags": [],
+            "recommendations": [...]
+        }
+    """
+    try:
+        if not request.profiles or len(request.profiles) < 2:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="At least 2 profiles are required for correlation"
+            )
+        
+        # Convert Pydantic models to dicts for the correlator
+        profiles_dict = [p.model_dump() for p in request.profiles]
+        
+        # Perform correlation analysis
+        result = cross_platform_correlator.correlate(profiles_dict)
+        
+        return CorrelationResponse(
+            overlaps=result.overlaps,
+            contradictions=result.contradictions,
+            impersonation_score=result.impersonation_score,
+            impersonation_level=result.impersonation_level,
+            flags=result.flags,
+            recommendations=result.recommendations
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in correlate_profiles endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during correlation: {str(e)}"
+        )

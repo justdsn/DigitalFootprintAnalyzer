@@ -430,3 +430,236 @@ class UsernameAnalyzeResponse(BaseModel):
         ...,
         description="Username pattern analysis results"
     )
+
+
+# =============================================================================
+# TRANSLITERATION MODELS (Phase 2)
+# =============================================================================
+
+class TransliterateRequest(BaseModel):
+    """
+    Request model for Sinhala transliteration endpoint.
+    
+    Attributes:
+        text: Sinhala text to transliterate
+        include_variants: Whether to include spelling variants (default True)
+    
+    Example:
+        {
+            "text": "සුනිල් පෙරේරා",
+            "include_variants": true
+        }
+    """
+    text: str = Field(
+        ...,
+        min_length=1,
+        max_length=500,
+        description="Sinhala text to transliterate",
+        examples=["සුනිල් පෙරේරා", "කොළඹ"]
+    )
+    include_variants: bool = Field(
+        default=True,
+        description="Whether to include spelling variants"
+    )
+    
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, v: str) -> str:
+        """Validate that text is not empty."""
+        if not v or not v.strip():
+            raise ValueError("Text cannot be empty")
+        return v.strip()
+
+
+class TransliterateResponse(BaseModel):
+    """
+    Response model for Sinhala transliteration endpoint.
+    
+    Contains the original text, Sinhala detection result,
+    and transliteration variants.
+    
+    Attributes:
+        original: Original input text
+        is_sinhala: Whether text contains Sinhala characters
+        transliterations: Primary transliteration results
+        variants: Spelling variants of transliterations
+    
+    Example:
+        {
+            "original": "සුනිල් පෙරේරා",
+            "is_sinhala": true,
+            "transliterations": ["sunil perera"],
+            "variants": ["suneel perera", "sunil pereera"]
+        }
+    """
+    original: str = Field(
+        ...,
+        description="Original input text"
+    )
+    is_sinhala: bool = Field(
+        ...,
+        description="Whether input contains Sinhala characters"
+    )
+    transliterations: List[str] = Field(
+        default_factory=list,
+        description="Primary transliteration results"
+    )
+    variants: List[str] = Field(
+        default_factory=list,
+        description="Spelling variants of transliterations"
+    )
+
+
+# =============================================================================
+# CORRELATION MODELS (Phase 2)
+# =============================================================================
+
+class PlatformProfile(BaseModel):
+    """
+    Model for a social media platform profile.
+    
+    Contains profile information from a single platform
+    for use in cross-platform correlation analysis.
+    
+    Attributes:
+        platform: Platform name (e.g., "facebook", "twitter")
+        username: Username on the platform
+        name: Display name (optional)
+        bio: Profile bio/description (optional)
+        location: Location from profile (optional)
+        email: Email address (optional)
+        phone: Phone number (optional)
+    
+    Example:
+        {
+            "platform": "facebook",
+            "username": "john_doe",
+            "name": "John Doe",
+            "bio": "Software developer",
+            "location": "Colombo"
+        }
+    """
+    platform: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="Platform name (e.g., facebook, twitter, instagram)",
+        examples=["facebook", "twitter", "instagram", "linkedin", "tiktok"]
+    )
+    username: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Username on the platform",
+        examples=["john_doe", "@johndoe"]
+    )
+    name: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description="Display name on the platform"
+    )
+    bio: Optional[str] = Field(
+        default=None,
+        max_length=1000,
+        description="Profile bio or description"
+    )
+    location: Optional[str] = Field(
+        default=None,
+        max_length=200,
+        description="Location from profile"
+    )
+    email: Optional[str] = Field(
+        default=None,
+        description="Email address if publicly visible"
+    )
+    phone: Optional[str] = Field(
+        default=None,
+        description="Phone number if publicly visible"
+    )
+
+
+class CorrelationRequest(BaseModel):
+    """
+    Request model for cross-platform correlation endpoint.
+    
+    Contains a list of profiles from different platforms
+    to analyze for overlaps, contradictions, and impersonation.
+    
+    Attributes:
+        profiles: List of platform profiles to correlate
+    
+    Example:
+        {
+            "profiles": [
+                {"platform": "facebook", "username": "john_doe", "name": "John Doe"},
+                {"platform": "twitter", "username": "johndoe", "name": "John D"}
+            ]
+        }
+    """
+    profiles: List[PlatformProfile] = Field(
+        ...,
+        min_length=2,
+        max_length=10,
+        description="List of platform profiles to correlate (2-10 profiles)"
+    )
+    
+    @field_validator("profiles")
+    @classmethod
+    def validate_profiles(cls, v: List[PlatformProfile]) -> List[PlatformProfile]:
+        """Validate that at least 2 profiles are provided."""
+        if len(v) < 2:
+            raise ValueError("At least 2 profiles are required for correlation")
+        return v
+
+
+class CorrelationResponse(BaseModel):
+    """
+    Response model for cross-platform correlation endpoint.
+    
+    Contains correlation analysis results including overlaps,
+    contradictions, impersonation risk assessment, and recommendations.
+    
+    Attributes:
+        overlaps: List of matching information across platforms
+        contradictions: List of conflicting information
+        impersonation_score: Risk score from 0 (low) to 100 (high)
+        impersonation_level: Risk level category
+        flags: Warning flags identified during analysis
+        recommendations: Suggested actions based on findings
+    
+    Example:
+        {
+            "overlaps": [{"field": "name", "platforms": ["facebook", "twitter"], ...}],
+            "contradictions": [],
+            "impersonation_score": 15,
+            "impersonation_level": "low",
+            "flags": [],
+            "recommendations": ["Enable two-factor authentication..."]
+        }
+    """
+    overlaps: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Matching information found across platforms"
+    )
+    contradictions: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Conflicting information found across platforms"
+    )
+    impersonation_score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Impersonation risk score from 0 (low) to 100 (high)"
+    )
+    impersonation_level: str = Field(
+        ...,
+        description="Risk level category (low/medium/high/critical)"
+    )
+    flags: List[str] = Field(
+        default_factory=list,
+        description="Warning flags identified during analysis"
+    )
+    recommendations: List[str] = Field(
+        default_factory=list,
+        description="Recommended actions based on analysis"
+    )
