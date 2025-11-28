@@ -198,6 +198,50 @@ export async function analyzeUsername(username) {
   });
 }
 
+/**
+ * Transliterate Sinhala text to English
+ * 
+ * @param {string} text - Sinhala text to transliterate
+ * @returns {Promise<Object>} Transliteration results
+ * 
+ * @example
+ * const result = await transliterate('දුෂාන්');
+ * // Returns: { original: 'දුෂාන්', transliterations: ['dushan', ...], is_sinhala: true }
+ */
+export async function transliterate(text) {
+  if (!text || !text.trim()) {
+    throw new ApiError('Text is required', 400);
+  }
+
+  return fetchWithTimeout(`${API_BASE_URL}/transliterate`, {
+    method: 'POST',
+    body: JSON.stringify({ text: text.trim() }),
+  });
+}
+
+/**
+ * Correlate profiles across platforms
+ * 
+ * @param {Array} profiles - List of profile objects to correlate
+ * @returns {Promise<Object>} Correlation results
+ * 
+ * @example
+ * const results = await correlate([
+ *   { platform: 'facebook', username: 'john_doe', name: 'John Doe' },
+ *   { platform: 'instagram', username: 'johndoe', name: 'John D' }
+ * ]);
+ */
+export async function correlate(profiles) {
+  if (!profiles || !Array.isArray(profiles) || profiles.length === 0) {
+    throw new ApiError('At least one profile is required', 400);
+  }
+
+  return fetchWithTimeout(`${API_BASE_URL}/correlate`, {
+    method: 'POST',
+    body: JSON.stringify({ profiles }),
+  });
+}
+
 // =============================================================================
 // DEFAULT EXPORT
 // =============================================================================
@@ -207,6 +251,8 @@ const api = {
   analyze,
   extractPII,
   analyzeUsername,
+  transliterate,
+  correlate,
   ApiError,
 };
 
