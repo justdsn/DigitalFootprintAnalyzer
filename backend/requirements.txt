@@ -28,11 +28,6 @@ pytest-asyncio>=0.23.0    # Async test support
 httpx>=0.26.0             # Async HTTP client for testing
 
 # -----------------------------------------------------------------------------
-# String Matching and Similarity
-# -----------------------------------------------------------------------------
-rapidfuzz>=3.6.0          # Fast fuzzy string matching for correlation
-
-# -----------------------------------------------------------------------------
 # Utilities
 # -----------------------------------------------------------------------------
 python-multipart>=0.0.6   # Form data parsing

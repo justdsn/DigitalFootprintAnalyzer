@@ -34,19 +34,13 @@ from app.models.schemas import (
     UsernameAnalyzeRequest,
     UsernameAnalyzeResponse,
     HealthResponse,
-    IdentifierType,
-    TransliterateRequest,
-    TransliterateResponse,
-    CorrelateRequest,
-    CorrelateResponse
+    IdentifierType
 )
 
 # Import services
 from app.services.pii_extractor import PIIExtractor
 from app.services.ner_engine import NEREngine
 from app.services.username_analyzer import UsernameAnalyzer
-from app.services.transliteration import SinhalaTransliterator
-from app.services.correlation import Correlator
 
 
 # =============================================================================
@@ -60,8 +54,6 @@ router = APIRouter()
 pii_extractor = PIIExtractor()
 ner_engine = NEREngine()
 username_analyzer = UsernameAnalyzer()
-sinhala_transliterator = SinhalaTransliterator()
-correlator = Correlator()
 
 
 # =============================================================================
@@ -593,175 +585,3 @@ def generate_recommendations(
     )
     
     return recommendations
-
-
-# =============================================================================
-# TRANSLITERATION ENDPOINT
-# =============================================================================
-
-@router.post(
-    "/transliterate",
-    response_model=TransliterateResponse,
-    summary="Transliterate Sinhala Text",
-    description="""
-    Convert Sinhala Unicode text to romanized English spellings.
-    
-    This endpoint:
-    1. Detects if the input contains Sinhala characters
-    2. Converts Sinhala text to romanized English
-    3. Generates multiple spelling variants
-    
-    Useful for searching Sri Lankan names and places that may be
-    written in either Sinhala script or various English spellings.
-    """
-)
-async def transliterate(request: TransliterateRequest) -> TransliterateResponse:
-    """
-    Transliterate Sinhala text to romanized English.
-    
-    Accepts Sinhala Unicode text and returns multiple possible
-    romanized spellings. Also works with romanized input to
-    generate spelling variants.
-    
-    Args:
-        request: TransliterateRequest containing the text to transliterate
-    
-    Returns:
-        TransliterateResponse: Original text, transliterations, and Sinhala flag
-    
-    Raises:
-        HTTPException: 400 if text is empty
-        HTTPException: 500 for internal processing errors
-    
-    Example:
-        Input: {"text": "දුෂාන්"}
-        Output: {
-            "original": "දුෂාන්",
-            "transliterations": ["dushan", "dushaan", "dusan"],
-            "is_sinhala": true
-        }
-    """
-    try:
-        # Validate input
-        if not request.text or not request.text.strip():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Text is required and cannot be empty"
-            )
-        
-        text = request.text.strip()
-        
-        # Check if text contains Sinhala characters
-        is_sinhala = sinhala_transliterator.is_sinhala(text)
-        
-        # Get transliterations/variants
-        if is_sinhala:
-            # Transliterate Sinhala to English
-            transliterations = sinhala_transliterator.transliterate(text)
-        else:
-            # Generate variants for romanized input
-            transliterations = sinhala_transliterator.generate_variants(text)
-        
-        # Ensure we have at least the original/cleaned text
-        if not transliterations:
-            transliterations = [text.lower()]
-        
-        return TransliterateResponse(
-            original=text,
-            transliterations=transliterations,
-            is_sinhala=is_sinhala
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in transliterate endpoint: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred during transliteration: {str(e)}"
-        )
-
-
-# =============================================================================
-# CORRELATION ENDPOINT
-# =============================================================================
-
-@router.post(
-    "/correlate",
-    response_model=CorrelateResponse,
-    summary="Correlate Cross-Platform Profiles",
-    description="""
-    Analyze and correlate PII across multiple social media profiles.
-    
-    This endpoint:
-    1. Compares profile information across platforms
-    2. Identifies overlapping information (shared PII)
-    3. Detects contradictions (conflicting information)
-    4. Calculates an impersonation risk score (0-100)
-    
-    Useful for detecting potential impersonation accounts and
-    verifying identity consistency across platforms.
-    """
-)
-async def correlate(request: CorrelateRequest) -> CorrelateResponse:
-    """
-    Correlate PII across multiple social media profiles.
-    
-    Analyzes profiles from different platforms to find overlaps,
-    contradictions, and calculate impersonation risk.
-    
-    Args:
-        request: CorrelateRequest containing list of profiles
-    
-    Returns:
-        CorrelateResponse: Overlaps, contradictions, score, and risk level
-    
-    Raises:
-        HTTPException: 400 if profiles list is empty
-        HTTPException: 500 for internal processing errors
-    
-    Example:
-        Input: {
-            "profiles": [
-                {"platform": "facebook", "username": "john_doe", "name": "John"},
-                {"platform": "instagram", "username": "johndoe", "name": "John D"}
-            ]
-        }
-        Output: {
-            "overlaps": [{"field": "username", "match_score": 0.85, ...}],
-            "contradictions": [],
-            "impersonation_score": 25,
-            "risk_level": "low",
-            "analysis_details": {...}
-        }
-    """
-    try:
-        # Validate input
-        if not request.profiles:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="At least one profile is required"
-            )
-        
-        # Convert Pydantic models to dictionaries for the correlator
-        profiles_data = [p.model_dump() for p in request.profiles]
-        
-        # Run correlation analysis
-        result = correlator.correlate_profiles(profiles_data)
-        
-        return CorrelateResponse(
-            overlaps=result['overlaps'],
-            contradictions=result['contradictions'],
-            impersonation_score=result['impersonation_score'],
-            risk_level=result['risk_level'],
-            analysis_details=result['analysis_details']
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in correlate endpoint: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"An error occurred during correlation: {str(e)}"
-        )

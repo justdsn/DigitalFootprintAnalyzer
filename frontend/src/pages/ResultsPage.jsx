@@ -3,7 +3,6 @@
 // =============================================================================
 // Page component for displaying analysis results.
 // Shows risk score, platform URLs, variations, PII, and recommendations.
-// Includes transliteration results and correlation visualization.
 // =============================================================================
 
 /**
@@ -12,9 +11,6 @@
  * Sections:
  * - Summary: Username and processing time
  * - Risk Assessment: Visual risk indicator
- * - Transliteration: Sinhala to English conversion results
- * - Correlation: Cross-platform comparison (if available)
- * - Impersonation Alert: Risk assessment for multiple profiles
  * - Platform Profiles: Links to check on each platform
  * - Username Variations: List of variations to monitor
  * - Detected PII: Extracted personal information
@@ -28,9 +24,6 @@ import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useLanguage } from '../context/LanguageContext';
 import RiskIndicator from '../components/RiskIndicator';
 import ResultCard, { ResultListItem, ResultBadge, ResultEmptyState } from '../components/ResultCard';
-import TransliterationDisplay from '../components/TransliterationDisplay';
-import CorrelationMatrix from '../components/CorrelationMatrix';
-import ImpersonationAlert from '../components/ImpersonationAlert';
 
 // =============================================================================
 // PLATFORM ICONS
@@ -171,53 +164,6 @@ function ResultsPage() {
         <div className="mb-8">
           <RiskIndicator score={results.risk_score} level={results.risk_level} />
         </div>
-
-        {/* -------------------------------------------------------------------
-         * Transliteration Results (if available)
-         * Shows Sinhala to English conversion with spelling variants
-         * ------------------------------------------------------------------- */}
-        {results.transliteration && results.transliteration.transliterations?.length > 0 && (
-          <div className="mb-8">
-            <TransliterationDisplay
-              original={results.transliteration.original}
-              transliterations={results.transliteration.transliterations}
-              isSinhala={results.transliteration.is_sinhala}
-            />
-          </div>
-        )}
-
-        {/* -------------------------------------------------------------------
-         * Correlation Results (if available)
-         * Shows cross-platform comparison and impersonation risk
-         * ------------------------------------------------------------------- */}
-        {results.correlation && (
-          <>
-            {/* Impersonation Alert for medium/high risk */}
-            {(results.correlation.risk_level === 'medium' || 
-              results.correlation.risk_level === 'high' || 
-              results.correlation.risk_level === 'critical') && (
-              <div className="mb-8">
-                <ImpersonationAlert
-                  score={results.correlation.impersonation_score}
-                  riskLevel={results.correlation.risk_level}
-                  riskFactors={results.correlation.analysis_details?.risk_factors || {}}
-                />
-              </div>
-            )}
-
-            {/* Correlation Matrix */}
-            {(results.correlation.overlaps?.length > 0 || 
-              results.correlation.contradictions?.length > 0) && (
-              <div className="mb-8">
-                <CorrelationMatrix
-                  profiles={results.correlation.analysis_details?.profiles || []}
-                  overlaps={results.correlation.overlaps}
-                  contradictions={results.correlation.contradictions}
-                />
-              </div>
-            )}
-          </>
-        )}
 
         {/* -------------------------------------------------------------------
          * Two Column Layout
