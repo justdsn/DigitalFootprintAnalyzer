@@ -1,4 +1,5 @@
-# 🔍 Digital Footprint Analyzer
+Phase-1
+# 🔍 Digital Footprint Analyzer [RP]
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -330,16 +331,6 @@ pytest tests/ -v --cov=app
 - [ ] Mobile application
 - [ ] Tamil language support
 
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
@@ -357,4 +348,4 @@ This tool is designed for personal privacy awareness and educational purposes. I
 
 ---
 
-<p align="center">Made with ❤️ for Sri Lankan citizens</p>
+<p align="center">Made with ❤️ for Sri Lankans</p>
