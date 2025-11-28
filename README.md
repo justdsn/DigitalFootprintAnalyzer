@@ -1,5 +1,5 @@
 Phase-1
-# 🔍 Digital Footprint Analyzer [RP] yo
+# 🔍 Digital Footprint Analyzer [RP]
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
