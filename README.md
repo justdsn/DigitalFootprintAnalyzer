@@ -1,4 +1,4 @@
-Phase-1
+Phase 1 & 2
 # 🔍 Digital Footprint Analyzer [RP]
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
@@ -46,6 +46,20 @@ Digital Footprint Analyzer is designed to help Sri Lankan citizens:
 - **English** - Full English language support
 - **Sinhala (සිංහල)** - Complete Sinhala translation for all UI text
 
+### 🔤 Sinhala Transliteration Engine (Phase 2)
+- **Sinhala to English Conversion** - Convert Sinhala Unicode text (දුෂාන්) to romanized English (dushan)
+- **Multiple Spelling Variants** - Generate alternative spellings (dushan, dushaan, dusan)
+- **Name Dictionary** - 50+ common Sri Lankan first names and surnames with pre-defined transliterations
+- **Location Dictionary** - 50+ Sri Lankan cities and towns with transliteration variants
+- **Automatic Detection** - Automatically detect Sinhala Unicode text (U+0D80-U+0DFF range)
+
+### 🔗 Cross-Platform Correlation (Phase 2)
+- **Profile Comparison** - Compare PII across Facebook, Instagram, X, LinkedIn profiles
+- **Overlap Detection** - Find matching information across platforms
+- **Contradiction Detection** - Identify conflicting information that may indicate impersonation
+- **Impersonation Scoring** - Calculate likelihood of fake profiles (0-100 score)
+- **Fuzzy String Matching** - Match names and bios with typo tolerance using Levenshtein, Jaro-Winkler algorithms
+
 ## 🛠️ Tech Stack
 
 ### Backend
@@ -56,6 +70,7 @@ Digital Footprint Analyzer is designed to help Sri Lankan citizens:
 | **spaCy** | Natural Language Processing and NER |
 | **Pydantic** | Data validation and settings management |
 | **Uvicorn** | ASGI server |
+| **rapidfuzz** | Fast fuzzy string matching for correlation |
 
 ### Frontend
 | Technology | Purpose |
@@ -78,27 +93,40 @@ Digital Footprint Analyzer is designed to help Sri Lankan citizens:
 DigitalFootprintAnalyzer/
 ├── backend/
 │   ├── app/
-│   │   ├── __init__.py           # Package initialization
-│   │   ├── main.py               # FastAPI application entry point
+│   │   ├── __init__.py
+│   │   ├── main.py
 │   │   ├── api/
 │   │   │   ├── __init__.py
-│   │   │   └── routes.py         # API endpoint definitions
+│   │   │   └── routes.py
 │   │   ├── core/
 │   │   │   ├── __init__.py
-│   │   │   └── config.py         # Application configuration
+│   │   │   └── config.py
 │   │   ├── services/
 │   │   │   ├── __init__.py
-│   │   │   ├── pii_extractor.py  # PII extraction with regex
-│   │   │   ├── ner_engine.py     # spaCy NER with Sri Lankan context
-│   │   │   └── username_analyzer.py # Username analysis service
+│   │   │   ├── pii_extractor.py
+│   │   │   ├── ner_engine.py
+│   │   │   ├── username_analyzer.py
+│   │   │   ├── transliteration/        # Phase 2
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── sinhala_engine.py   # Main transliteration logic
+│   │   │   │   ├── grapheme_map.py     # Sinhala character mappings
+│   │   │   │   ├── name_dictionary.py  # Sri Lankan names
+│   │   │   │   └── location_dictionary.py # Sri Lankan places
+│   │   │   └── correlation/            # Phase 2
+│   │   │       ├── __init__.py
+│   │   │       ├── correlator.py       # Cross-platform correlation
+│   │   │       ├── fuzzy_matcher.py    # Fuzzy string matching
+│   │   │       └── similarity_scorer.py # Similarity calculations
 │   │   └── models/
 │   │       ├── __init__.py
-│   │       └── schemas.py        # Pydantic request/response models
+│   │       └── schemas.py
 │   ├── tests/
 │   │   ├── __init__.py
 │   │   ├── test_pii_extractor.py
-│   │   └── test_username_analyzer.py
-│   ├── requirements.txt          # Python dependencies
+│   │   ├── test_username_analyzer.py
+│   │   ├── test_transliteration.py     # Phase 2
+│   │   └── test_correlation.py         # Phase 2
+│   ├── requirements.txt
 │   ├── Dockerfile
 │   └── .env.example
 ├── frontend/
@@ -106,33 +134,36 @@ DigitalFootprintAnalyzer/
 │   │   └── index.html
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── Navbar.jsx        # Navigation component
-│   │   │   ├── Footer.jsx        # Footer component
-│   │   │   ├── InputForm.jsx     # Analysis input form
-│   │   │   ├── ResultCard.jsx    # Result display cards
-│   │   │   ├── RiskIndicator.jsx # Visual risk score
-│   │   │   └── LanguageToggle.jsx # Language switcher
+│   │   │   ├── Navbar.jsx
+│   │   │   ├── Footer.jsx
+│   │   │   ├── InputForm.jsx
+│   │   │   ├── ResultCard.jsx
+│   │   │   ├── RiskIndicator.jsx
+│   │   │   ├── LanguageToggle.jsx
+│   │   │   ├── TransliterationDisplay.jsx  # Phase 2
+│   │   │   ├── CorrelationMatrix.jsx       # Phase 2
+│   │   │   └── ImpersonationAlert.jsx      # Phase 2
 │   │   ├── pages/
-│   │   │   ├── HomePage.jsx      # Landing page
-│   │   │   ├── AnalyzePage.jsx   # Analysis form page
-│   │   │   └── ResultsPage.jsx   # Results display page
+│   │   │   ├── HomePage.jsx
+│   │   │   ├── AnalyzePage.jsx
+│   │   │   └── ResultsPage.jsx
 │   │   ├── services/
-│   │   │   └── api.js            # API service layer
+│   │   │   └── api.js
 │   │   ├── i18n/
-│   │   │   ├── en.json           # English translations
-│   │   │   └── si.json           # Sinhala translations
+│   │   │   ├── en.json
+│   │   │   └── si.json
 │   │   ├── context/
-│   │   │   └── LanguageContext.jsx # i18n context provider
-│   │   ├── App.jsx               # Root component
-│   │   ├── index.js              # Application entry point
-│   │   └── index.css             # Global styles with Tailwind
+│   │   │   └── LanguageContext.jsx
+│   │   ├── App.jsx
+│   │   ├── index.js
+│   │   └── index.css
 │   ├── package.json
 │   ├── tailwind.config.js
 │   ├── Dockerfile
 │   ├── nginx.conf
 │   └── .env.example
-├── docker-compose.yml            # Docker orchestration
-└── README.md                     # This file
+├── docker-compose.yml
+└── README.md
 ```
 
 ## 🚀 Getting Started
@@ -227,6 +258,8 @@ DigitalFootprintAnalyzer/
 | `POST` | `/api/analyze` | Main analysis endpoint |
 | `POST` | `/api/extract-pii` | Extract PII from text |
 | `POST` | `/api/analyze-username` | Analyze username patterns |
+| `POST` | `/api/transliterate` | Transliterate Sinhala text to English |
+| `POST` | `/api/correlate` | Correlate profiles across platforms |
 
 ### Main Analysis Request
 
@@ -282,6 +315,71 @@ POST /api/analyze
 }
 ```
 
+### Transliteration Request (Phase 2)
+
+```json
+POST /api/transliterate
+{
+  "text": "දුෂාන් පෙරේරා",
+  "include_variants": true
+}
+```
+
+### Transliteration Response
+
+```json
+{
+  "original": "දුෂාන් පෙරේරා",
+  "is_sinhala": true,
+  "transliterations": ["dushan perera"],
+  "variants": ["dushan perera", "dushaan perera", "dushan pereera", "dushaan pereera"]
+}
+```
+
+### Correlation Request (Phase 2)
+
+```json
+POST /api/correlate
+{
+  "profiles": [
+    {
+      "platform": "facebook",
+      "username": "johnperera",
+      "name": "John Perera",
+      "bio": "Software Developer from Colombo",
+      "location": "Colombo, Sri Lanka"
+    },
+    {
+      "platform": "instagram",
+      "username": "john_perera",
+      "name": "John P",
+      "bio": "Developer | Colombo",
+      "location": "Colombo"
+    }
+  ]
+}
+```
+
+### Correlation Response
+
+```json
+{
+  "overlaps": [
+    {"field": "location", "platforms": ["facebook", "instagram"], "values": ["Colombo, Sri Lanka", "Colombo"], "similarity": 0.85}
+  ],
+  "contradictions": [
+    {"field": "name", "platforms": ["facebook", "instagram"], "values": ["John Perera", "John P"], "similarity": 0.65}
+  ],
+  "impersonation_score": 25,
+  "impersonation_level": "low",
+  "flags": [],
+  "recommendations": [
+    "Profile names differ slightly across platforms - this is common but worth noting",
+    "Consider using consistent profile information across platforms"
+  ]
+}
+```
+
 ## 🧪 Testing
 
 ### Backend Tests
@@ -290,6 +388,11 @@ POST /api/analyze
 cd backend
 pytest tests/ -v
 ```
+
+### Test Summary
+- **Phase 1 Tests**: 72 tests (PII extraction, username analysis)
+- **Phase 2 Tests**: 44 tests (transliteration, correlation)
+- **Total**: 116 tests passing ✅
 
 ### Test Coverage
 
@@ -310,22 +413,34 @@ pytest tests/ -v --cov=app
 
 ## 🔮 Roadmap
 
-### Phase 1 (Current) ✅
+### Phase 1 ✅ Complete
 - [x] Backend API with FastAPI
-- [x] PII extraction service
+- [x] PII extraction service (emails, phones, URLs, mentions)
 - [x] NER engine with Sri Lankan context
 - [x] Username analyzer service
 - [x] React frontend with Tailwind CSS
 - [x] i18n support (English/Sinhala)
 - [x] Docker configuration
+- [x] 72 tests passing
 
-### Phase 2 (Planned)
-- [ ] Active profile checking via web scraping
-- [ ] Data breach checking integration
+### Phase 2 ✅ Complete
+- [x] Sinhala → English transliteration engine
+- [x] Grapheme mapping for Sinhala Unicode characters
+- [x] Name dictionary (50+ Sri Lankan names)
+- [x] Location dictionary (50+ Sri Lankan places)
+- [x] Cross-platform PII correlation
+- [x] Fuzzy string matching (Levenshtein, Jaro-Winkler)
+- [x] Impersonation detection scoring
+- [x] Frontend components (TransliterationDisplay, CorrelationMatrix, ImpersonationAlert)
+- [x] 44 additional tests (116 total)
+
+### Phase 3 (Planned)
+- [ ] Social media data collection
+- [ ] Profile existence checking
+- [ ] Data breach integration (HaveIBeenPwned API)
 - [ ] Extended platform support
-- [ ] User accounts and saved analyses
 
-### Phase 3 (Future)
+### Phase 4 (Future)
 - [ ] Machine learning for impersonation detection
 - [ ] Browser extension
 - [ ] Mobile application
