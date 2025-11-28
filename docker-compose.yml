@@ -1,0 +1,83 @@
+# =============================================================================
+# DOCKER COMPOSE CONFIGURATION
+# =============================================================================
+# Orchestrates the backend and frontend services for the Digital Footprint
+# Analyzer application.
+#
+# Usage:
+#   docker-compose up --build     # Build and start all services
+#   docker-compose up -d          # Start in detached mode
+#   docker-compose down           # Stop all services
+#   docker-compose logs -f        # View logs
+# =============================================================================
+
+version: '3.8'
+
+services:
+  # ---------------------------------------------------------------------------
+  # Backend Service (FastAPI)
+  # ---------------------------------------------------------------------------
+  # Python FastAPI application providing the REST API
+  # Includes spaCy NLP model for entity recognition
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dfa-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DEBUG=False
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:8080,http://frontend:3000
+      - SPACY_MODEL=en_core_web_sm
+    volumes:
+      # Mount app directory for development (optional - comment out for production)
+      # - ./backend/app:/app/app
+      - backend-data:/app/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - dfa-network
+
+  # ---------------------------------------------------------------------------
+  # Frontend Service (React)
+  # ---------------------------------------------------------------------------
+  # React application served via nginx in production
+  # Connects to backend API for analysis
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - REACT_APP_API_URL=http://localhost:8000/api
+    container_name: dfa-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - dfa-network
+
+# =============================================================================
+# NETWORKS
+# =============================================================================
+networks:
+  dfa-network:
+    driver: bridge
+    name: dfa-network
+
+# =============================================================================
+# VOLUMES
+# =============================================================================
+volumes:
+  backend-data:
+    name: dfa-backend-data

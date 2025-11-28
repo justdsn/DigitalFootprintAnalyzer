@@ -1,0 +1,188 @@
+{
+  "app": {
+    "name": "Digital Footprint Analyzer",
+    "tagline": "Sri Lanka OSINT Tool"
+  },
+  "nav": {
+    "home": "Home",
+    "analyze": "Analyze",
+    "about": "About",
+    "language": "සිංහල"
+  },
+  "home": {
+    "hero": {
+      "title": "Discover Your Digital Footprint",
+      "subtitle": "Find out what personal information you've accidentally exposed on social media and check for potential impersonation accounts",
+      "cta": "Start Analysis",
+      "secondary_cta": "Learn More"
+    },
+    "features": {
+      "title": "What We Offer",
+      "subtitle": "Comprehensive tools to protect your online identity",
+      "exposure": {
+        "title": "Exposure Detection",
+        "description": "Identify personal information like emails, phone numbers, and locations that may be publicly visible on your social profiles"
+      },
+      "impersonation": {
+        "title": "Impersonation Check",
+        "description": "Discover potential fake accounts or profiles that might be impersonating you across major social platforms"
+      },
+      "analysis": {
+        "title": "Smart Analysis",
+        "description": "Get AI-powered insights about your username patterns and receive personalized privacy recommendations"
+      }
+    },
+    "howItWorks": {
+      "title": "How It Works",
+      "subtitle": "Three simple steps to check your digital footprint",
+      "step1": {
+        "title": "Enter Your Details",
+        "description": "Provide your username and optionally your email, phone, or name for deeper analysis"
+      },
+      "step2": {
+        "title": "We Analyze",
+        "description": "Our system scans major social platforms and analyzes your digital presence"
+      },
+      "step3": {
+        "title": "Get Results",
+        "description": "Receive a comprehensive report with risk assessment and actionable recommendations"
+      }
+    },
+    "cta": {
+      "title": "Ready to Check Your Digital Footprint?",
+      "subtitle": "Start your free analysis today and take control of your online privacy",
+      "button": "Start Free Analysis"
+    }
+  },
+  "analyze": {
+    "title": "Analyze Your Digital Footprint",
+    "subtitle": "Enter your information below to begin the analysis",
+    "form": {
+      "username": {
+        "label": "Username",
+        "placeholder": "Enter your social media username",
+        "hint": "Required - This is the main identifier we'll search for"
+      },
+      "email": {
+        "label": "Email Address",
+        "placeholder": "your.email@example.com",
+        "hint": "Optional - Helps identify exposure in data breaches"
+      },
+      "phone": {
+        "label": "Phone Number",
+        "placeholder": "077 123 4567 or +94 77 123 4567",
+        "hint": "Optional - Sri Lankan formats supported"
+      },
+      "name": {
+        "label": "Full Name",
+        "placeholder": "Your full name",
+        "hint": "Optional - Used for name-based searches"
+      },
+      "submit": "Start Analysis",
+      "analyzing": "Analyzing..."
+    },
+    "privacy": {
+      "title": "Privacy Notice",
+      "description": "We only analyze publicly available information. Your data is not stored or shared with third parties. All analysis is performed in real-time and results are only shown to you."
+    },
+    "errors": {
+      "usernameRequired": "Username is required",
+      "invalidEmail": "Please enter a valid email address",
+      "invalidPhone": "Please enter a valid Sri Lankan phone number",
+      "apiError": "An error occurred during analysis. Please try again."
+    }
+  },
+  "results": {
+    "title": "Analysis Results",
+    "subtitle": "Here's what we found about your digital footprint",
+    "summary": {
+      "title": "Summary",
+      "username": "Username Analyzed",
+      "processingTime": "Processing Time"
+    },
+    "risk": {
+      "title": "Risk Assessment",
+      "score": "Risk Score",
+      "level": "Risk Level",
+      "low": "Low Risk",
+      "medium": "Medium Risk",
+      "high": "High Risk",
+      "lowDescription": "Your digital footprint appears to be well-managed",
+      "mediumDescription": "Some areas could use improvement for better privacy",
+      "highDescription": "Consider taking immediate action to protect your privacy"
+    },
+    "platforms": {
+      "title": "Platform Profiles",
+      "subtitle": "Check these URLs to verify your presence on each platform",
+      "checkProfile": "Check Profile"
+    },
+    "variations": {
+      "title": "Username Variations",
+      "subtitle": "These variations of your username should be monitored for impersonation"
+    },
+    "pii": {
+      "title": "Detected Information",
+      "subtitle": "Personal information found in your provided data",
+      "emails": "Email Addresses",
+      "phones": "Phone Numbers",
+      "urls": "URLs",
+      "mentions": "Mentions"
+    },
+    "entities": {
+      "title": "Recognized Entities",
+      "subtitle": "Names, locations, and organizations detected",
+      "persons": "Persons",
+      "locations": "Locations",
+      "organizations": "Organizations"
+    },
+    "patterns": {
+      "title": "Pattern Analysis",
+      "subtitle": "Analysis of your username structure",
+      "length": "Length",
+      "hasNumbers": "Contains Numbers",
+      "hasUnderscores": "Contains Underscores",
+      "hasDots": "Contains Dots",
+      "numberDensity": "Number Density",
+      "suspiciousPatterns": "Suspicious Patterns Detected"
+    },
+    "recommendations": {
+      "title": "Recommendations",
+      "subtitle": "Steps you can take to improve your online privacy"
+    },
+    "actions": {
+      "newAnalysis": "New Analysis",
+      "print": "Print Report",
+      "share": "Share Results"
+    }
+  },
+  "footer": {
+    "description": "A Sri Lanka-focused OSINT tool helping citizens understand and protect their digital footprint",
+    "links": {
+      "title": "Quick Links",
+      "home": "Home",
+      "analyze": "Analyze",
+      "privacy": "Privacy Policy",
+      "terms": "Terms of Service"
+    },
+    "contact": {
+      "title": "Contact",
+      "email": "info@digitalfootprint.lk"
+    },
+    "copyright": "© 2024 Digital Footprint Analyzer. All rights reserved."
+  },
+  "common": {
+    "yes": "Yes",
+    "no": "No",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "back": "Back",
+    "next": "Next",
+    "submit": "Submit",
+    "cancel": "Cancel",
+    "close": "Close",
+    "learnMore": "Learn More",
+    "characters": "characters",
+    "milliseconds": "ms"
+  }
+}
