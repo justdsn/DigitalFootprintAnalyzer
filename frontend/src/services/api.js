@@ -207,7 +207,87 @@ const api = {
   analyze,
   extractPII,
   analyzeUsername,
+  transliterate,
+  correlateProfiles,
   ApiError,
 };
 
 export default api;
+
+
+// =============================================================================
+// TRANSLITERATION API (Phase 2)
+// =============================================================================
+
+/**
+ * Transliterate Sinhala text to English variants
+ * 
+ * @param {string} text - Sinhala text to transliterate
+ * @param {boolean} includeVariants - Whether to include spelling variants (default true)
+ * @returns {Promise<Object>} Transliteration results
+ * 
+ * @example
+ * const result = await transliterate('සුනිල් පෙරේරා');
+ * // Returns: {
+ * //   original: 'සුනිල් පෙරේරා',
+ * //   is_sinhala: true,
+ * //   transliterations: ['sunil perera'],
+ * //   variants: ['suneel perera', ...]
+ * // }
+ */
+export async function transliterate(text, includeVariants = true) {
+  if (!text || !text.trim()) {
+    throw new ApiError('Text is required', 400);
+  }
+
+  return fetchWithTimeout(`${API_BASE_URL}/transliterate`, {
+    method: 'POST',
+    body: JSON.stringify({ 
+      text: text.trim(),
+      include_variants: includeVariants 
+    }),
+  });
+}
+
+
+// =============================================================================
+// CORRELATION API (Phase 2)
+// =============================================================================
+
+/**
+ * Correlate profiles across platforms for impersonation detection
+ * 
+ * @param {Array<Object>} profiles - Array of platform profile objects
+ * @returns {Promise<Object>} Correlation results
+ * 
+ * @example
+ * const result = await correlateProfiles([
+ *   { platform: 'facebook', username: 'john_doe', name: 'John Doe' },
+ *   { platform: 'twitter', username: 'johndoe', name: 'John D' }
+ * ]);
+ * // Returns: {
+ * //   overlaps: [...],
+ * //   contradictions: [...],
+ * //   impersonation_score: 15,
+ * //   impersonation_level: 'low',
+ * //   flags: [],
+ * //   recommendations: [...]
+ * // }
+ */
+export async function correlateProfiles(profiles) {
+  if (!profiles || !Array.isArray(profiles) || profiles.length < 2) {
+    throw new ApiError('At least 2 profiles are required', 400);
+  }
+
+  // Validate each profile has required fields
+  for (const profile of profiles) {
+    if (!profile.platform || !profile.username) {
+      throw new ApiError('Each profile must have platform and username', 400);
+    }
+  }
+
+  return fetchWithTimeout(`${API_BASE_URL}/correlate`, {
+    method: 'POST',
+    body: JSON.stringify({ profiles }),
+  });
+}
