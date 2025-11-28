@@ -182,7 +182,7 @@
   /* Text gradient utility */
   .text-gradient {
     @apply bg-clip-text text-transparent 
-           bg-gradient-to-r from-primary-600 to-accent-500;
+           bg-gradient-to-r from-blue-600 to-indigo-500;
   }
 
   /* Hide scrollbar but keep functionality */

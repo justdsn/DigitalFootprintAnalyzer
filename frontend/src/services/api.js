@@ -126,39 +126,31 @@ export async function checkHealth() {
  * Perform main digital footprint analysis
  * 
  * @param {Object} params - Analysis parameters
- * @param {string} params.username - Username to analyze (required)
- * @param {string} [params.email] - Email address (optional)
- * @param {string} [params.phone] - Phone number (optional)
- * @param {string} [params.name] - Full name (optional)
+ * @param {string} params.identifier - Identifier to analyze (required)
+ * @param {string} params.identifier_type - Type of identifier (username, email, phone, name)
  * @returns {Promise<Object>} Analysis results
  * 
  * @example
  * const results = await analyze({
- *   username: 'john_doe',
- *   email: 'john@example.com'
+ *   identifier: 'john_doe',
+ *   identifier_type: 'username'
  * });
  */
-export async function analyze({ username, email, phone, name }) {
+export async function analyze({ identifier, identifier_type }) {
   // Validate required field
-  if (!username || !username.trim()) {
-    throw new ApiError('Username is required', 400);
+  if (!identifier || !identifier.trim()) {
+    throw new ApiError('Identifier is required', 400);
+  }
+
+  if (!identifier_type) {
+    throw new ApiError('Identifier type is required', 400);
   }
 
   // Build request body
   const body = {
-    username: username.trim(),
+    identifier: identifier.trim(),
+    identifier_type: identifier_type,
   };
-
-  // Add optional fields if provided
-  if (email && email.trim()) {
-    body.email = email.trim();
-  }
-  if (phone && phone.trim()) {
-    body.phone = phone.trim();
-  }
-  if (name && name.trim()) {
-    body.name = name.trim();
-  }
 
   return fetchWithTimeout(`${API_BASE_URL}/analyze`, {
     method: 'POST',

@@ -26,6 +26,8 @@ import Footer from './components/Footer';
 import HomePage from './pages/HomePage';
 import AnalyzePage from './pages/AnalyzePage';
 import ResultsPage from './pages/ResultsPage';
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
+import TermsOfServicePage from './pages/TermsOfServicePage';
 
 // Context Providers
 import { LanguageProvider } from './context/LanguageContext';
@@ -64,6 +66,12 @@ function App() {
               
               {/* Results Page - Display analysis results */}
               <Route path="/results" element={<ResultsPage />} />
+              
+              {/* Privacy Policy Page */}
+              <Route path="/privacy" element={<PrivacyPolicyPage />} />
+              
+              {/* Terms of Service Page */}
+              <Route path="/terms" element={<TermsOfServicePage />} />
             </Routes>
           </main>
 

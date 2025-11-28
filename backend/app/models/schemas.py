@@ -21,8 +21,23 @@ Each model includes:
 """
 
 from pydantic import BaseModel, Field, field_validator
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Literal
+from enum import Enum
 import re
+
+
+# =============================================================================
+# ENUMS
+# =============================================================================
+
+class IdentifierType(str, Enum):
+    """
+    Enum for identifier types that can be searched.
+    """
+    USERNAME = "username"
+    EMAIL = "email"
+    PHONE = "phone"
+    NAME = "name"
 
 
 # =============================================================================
@@ -75,118 +90,69 @@ class AnalyzeRequest(BaseModel):
     """
     Request model for the main analysis endpoint.
     
-    Contains all input parameters for comprehensive digital footprint analysis.
-    Username is required; other fields are optional but enhance the analysis.
+    Contains a single identifier with its type for digital footprint analysis.
+    The identifier can be a username, email, phone number, or name.
     
     Attributes:
-        username: Social media username to analyze (required)
-        email: Email address for PII extraction (optional)
-        phone: Phone number - Sri Lankan formats supported (optional)
-        name: Full name for NER analysis (optional)
+        identifier: The value to search/analyze (required)
+        identifier_type: The type of identifier (username, email, phone, name)
     
     Example:
         {
-            "username": "john_doe",
-            "email": "john@example.com",
-            "phone": "0771234567",
-            "name": "John Perera"
+            "identifier": "john_doe",
+            "identifier_type": "username"
         }
     """
-    username: str = Field(
+    identifier: str = Field(
         ...,
         min_length=1,
-        max_length=100,
-        description="Social media username to analyze",
-        examples=["john_doe"]
-    )
-    email: Optional[str] = Field(
-        None,
-        description="Email address for enhanced analysis",
-        examples=["john@example.com"]
-    )
-    phone: Optional[str] = Field(
-        None,
-        description="Phone number (Sri Lankan formats: 07X-XXXXXXX, +94)",
-        examples=["0771234567", "+94771234567"]
-    )
-    name: Optional[str] = Field(
-        None,
         max_length=200,
-        description="Full name for NER analysis",
-        examples=["John Perera"]
+        description="The identifier value to analyze",
+        examples=["john_doe", "john@example.com", "0771234567", "John Perera"]
+    )
+    identifier_type: IdentifierType = Field(
+        ...,
+        description="Type of identifier being searched",
+        examples=["username", "email", "phone", "name"]
     )
     
-    @field_validator("username")
+    @field_validator("identifier")
     @classmethod
-    def validate_username(cls, v: str) -> str:
+    def validate_identifier(cls, v: str) -> str:
         """
-        Validate and clean the username.
+        Validate and clean the identifier.
         
         Rules:
         - Cannot be empty or whitespace only
-        - Strips leading @ symbol if present
         - Trims whitespace
         """
         if not v or not v.strip():
-            raise ValueError("Username cannot be empty")
-        # Clean up the username
-        cleaned = v.strip().lstrip('@')
-        if not cleaned:
-            raise ValueError("Username cannot be just '@'")
-        return cleaned
-    
-    @field_validator("email")
-    @classmethod
-    def validate_email(cls, v: Optional[str]) -> Optional[str]:
-        """
-        Validate email format if provided.
-        
-        Uses a simplified RFC 5322 pattern for validation.
-        """
-        if v is None or v == "":
-            return None
-        
-        # Basic email validation pattern
-        email_pattern = re.compile(
-            r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        )
-        
-        v = v.strip().lower()
-        if not email_pattern.match(v):
-            raise ValueError("Invalid email format")
-        
-        return v
-    
-    @field_validator("phone")
-    @classmethod
-    def validate_phone(cls, v: Optional[str]) -> Optional[str]:
-        """
-        Validate phone number if provided.
-        
-        Accepts Sri Lankan phone formats:
-        - 07X XXXXXXX (local)
-        - +94 7X XXXXXXX (international)
-        - 0094 7X XXXXXXX (international)
-        """
-        if v is None or v == "":
-            return None
-        
-        # Remove all non-digit characters except +
-        cleaned = re.sub(r'[^\d+]', '', v)
-        
-        # Validate it looks like a Sri Lankan number
-        # Local: 07XXXXXXXX (10 digits)
-        # International: +947XXXXXXXX (12 chars) or 00947XXXXXXXX (13 chars)
-        if not (
-            (len(cleaned) == 10 and cleaned.startswith('07')) or
-            (len(cleaned) == 12 and cleaned.startswith('+947')) or
-            (len(cleaned) == 13 and cleaned.startswith('00947'))
-        ):
-            # Be lenient - if it has digits, keep it
-            if not cleaned.replace('+', '').isdigit():
-                raise ValueError("Invalid phone number format")
-        
+            raise ValueError("Identifier cannot be empty")
         return v.strip()
+    
+    def get_as_username(self) -> Optional[str]:
+        """Get the identifier as username if type is username."""
+        if self.identifier_type == IdentifierType.USERNAME:
+            return self.identifier.lstrip('@')
+        return None
+    
+    def get_as_email(self) -> Optional[str]:
+        """Get the identifier as email if type is email."""
+        if self.identifier_type == IdentifierType.EMAIL:
+            return self.identifier.lower()
+        return None
+    
+    def get_as_phone(self) -> Optional[str]:
+        """Get the identifier as phone if type is phone."""
+        if self.identifier_type == IdentifierType.PHONE:
+            return self.identifier
+        return None
+    
+    def get_as_name(self) -> Optional[str]:
+        """Get the identifier as name if type is name."""
+        if self.identifier_type == IdentifierType.NAME:
+            return self.identifier
+        return None
 
 
 class PlatformUrl(BaseModel):

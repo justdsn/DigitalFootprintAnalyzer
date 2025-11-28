@@ -70,7 +70,7 @@ function Navbar() {
             onClick={closeMobileMenu}
           >
             {/* Logo Icon */}
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-600 to-accent-500 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-500 flex items-center justify-center">
               <svg 
                 className="w-6 h-6 text-white" 
                 fill="none" 

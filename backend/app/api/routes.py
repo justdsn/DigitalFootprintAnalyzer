@@ -33,7 +33,8 @@ from app.models.schemas import (
     PIIExtractResponse,
     UsernameAnalyzeRequest,
     UsernameAnalyzeResponse,
-    HealthResponse
+    HealthResponse,
+    IdentifierType
 )
 
 # Import services
@@ -104,8 +105,8 @@ async def health_check() -> HealthResponse:
     summary="Analyze Digital Footprint",
     description="""
     Main analysis endpoint that combines all services to provide a comprehensive
-    digital footprint analysis. Accepts username (required) and optionally
-    email, phone, and name for enhanced analysis.
+    digital footprint analysis. Accepts an identifier (username, email, phone, or name)
+    with its type for targeted analysis.
     """
 )
 async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
@@ -113,27 +114,27 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
     Perform comprehensive digital footprint analysis.
     
     This endpoint:
-    1. Generates platform URLs for the provided username
-    2. Creates username variations to check for impersonation
-    3. Extracts PII from any provided name/email/phone
-    4. Runs NER analysis on the combined input
-    5. Calculates a risk score based on exposure level
+    1. Analyzes the identifier based on its type
+    2. Generates platform URLs for username searches
+    3. Creates variations to check for impersonation
+    4. Extracts PII from the provided identifier
+    5. Runs NER analysis for name-based searches
+    6. Calculates a risk score based on exposure level
     
     Args:
-        request: AnalyzeRequest containing username (required) and 
-                optional email, phone, and name
+        request: AnalyzeRequest containing identifier and identifier_type
     
     Returns:
         AnalyzeResponse: Comprehensive analysis results including:
             - Platform URLs
-            - Username variations
+            - Identifier variations
             - Extracted PII
             - NER entities
             - Risk assessment
             - Recommendations
     
     Raises:
-        HTTPException: 400 if username is empty or invalid
+        HTTPException: 400 if identifier is empty or invalid
         HTTPException: 500 for internal processing errors
     """
     start_time = time.time()
@@ -142,66 +143,124 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         # ---------------------------------------------------------------------
         # Input Validation
         # ---------------------------------------------------------------------
-        if not request.username or not request.username.strip():
+        if not request.identifier or not request.identifier.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username is required and cannot be empty"
+                detail="Identifier is required and cannot be empty"
             )
         
-        username = request.username.strip()
+        identifier = request.identifier.strip()
+        identifier_type = request.identifier_type
         
         # ---------------------------------------------------------------------
-        # Username Analysis
+        # Initialize Results
         # ---------------------------------------------------------------------
-        # Generate platform URLs for the main username
-        platform_urls = username_analyzer.generate_platform_urls(username)
-        
-        # Generate username variations to check for impersonation
-        variations = username_analyzer.generate_variations(username)
-        
-        # Analyze username patterns
-        pattern_analysis = username_analyzer.analyze_patterns(username)
-        
-        # ---------------------------------------------------------------------
-        # PII Extraction
-        # ---------------------------------------------------------------------
-        # Combine all provided information for PII extraction
-        combined_text = f"{username}"
-        if request.name:
-            combined_text += f" {request.name}"
-        if request.email:
-            combined_text += f" {request.email}"
-        if request.phone:
-            combined_text += f" {request.phone}"
-        
-        extracted_pii = pii_extractor.extract_all(combined_text)
-        
-        # If email was directly provided, ensure it's included
-        if request.email:
-            if request.email not in extracted_pii.get("emails", []):
-                extracted_pii["emails"].append(request.email)
-        
-        # If phone was directly provided, normalize and include
-        if request.phone:
-            normalized_phone = pii_extractor.normalize_phone(request.phone)
-            if normalized_phone and normalized_phone not in extracted_pii.get("phones", []):
-                extracted_pii["phones"].append(normalized_phone)
-        
-        # ---------------------------------------------------------------------
-        # NER Analysis
-        # ---------------------------------------------------------------------
-        # Run NER on name if provided
+        platform_urls = []
+        variations = []
+        pattern_analysis = {}
+        extracted_pii = {"emails": [], "phones": [], "urls": [], "mentions": []}
         ner_results = {"persons": [], "locations": [], "organizations": []}
-        if request.name:
-            ner_results = ner_engine.extract_entities(request.name)
+        
+        # Determine the display username (for results)
+        display_username = identifier
+        
+        # ---------------------------------------------------------------------
+        # Type-Specific Analysis
+        # ---------------------------------------------------------------------
+        
+        if identifier_type == IdentifierType.USERNAME:
+            # Username analysis
+            username = identifier.lstrip('@')
+            display_username = username
+            
+            # Generate platform URLs
+            platform_urls = username_analyzer.generate_platform_urls(username)
+            
+            # Generate variations
+            variations = username_analyzer.generate_variations(username)
+            
+            # Analyze patterns
+            pattern_analysis = username_analyzer.analyze_patterns(username)
+            
+        elif identifier_type == IdentifierType.EMAIL:
+            # Email analysis
+            email = identifier.lower()
+            display_username = email.split('@')[0]  # Use email prefix as display
+            
+            # Extract username from email for platform search
+            email_username = email.split('@')[0]
+            platform_urls = username_analyzer.generate_platform_urls(email_username)
+            variations = username_analyzer.generate_variations(email_username)
+            pattern_analysis = username_analyzer.analyze_patterns(email_username)
+            
+            # Add the email to extracted PII
+            extracted_pii["emails"].append(email)
+            
+        elif identifier_type == IdentifierType.PHONE:
+            # Phone number analysis
+            phone = identifier
+            
+            # Normalize phone for display
+            cleaned_phone = phone.replace(" ", "").replace("-", "")
+            display_username = cleaned_phone
+            
+            # Add phone to extracted PII
+            normalized_phone = pii_extractor.normalize_phone(phone)
+            if normalized_phone:
+                extracted_pii["phones"].append(normalized_phone)
+            else:
+                extracted_pii["phones"].append(phone)
+            
+            # Try to extract potential username from phone (last digits)
+            if len(cleaned_phone) >= 4:
+                phone_suffix = cleaned_phone[-4:]
+                # Generate minimal platform URLs (phone-based search is limited)
+                platform_urls = username_analyzer.generate_platform_urls(phone_suffix)
+            
+            pattern_analysis = {
+                "has_numbers": True,
+                "has_letters": False,
+                "number_density": 1.0,
+                "has_suspicious_patterns": False
+            }
+            
+        elif identifier_type == IdentifierType.NAME:
+            # Name-based analysis
+            name = identifier
+            display_username = name.replace(" ", "_").lower()
+            
+            # Run NER analysis on the name
+            ner_results = ner_engine.extract_entities(name)
+            
+            # Generate potential username variations from name
+            name_parts = name.lower().split()
+            if len(name_parts) >= 2:
+                # Common username patterns from names
+                potential_usernames = [
+                    name_parts[0],  # firstname
+                    name_parts[-1],  # lastname
+                    f"{name_parts[0]}{name_parts[-1]}",  # firstnamelastname
+                    f"{name_parts[0]}_{name_parts[-1]}",  # firstname_lastname
+                    f"{name_parts[0]}.{name_parts[-1]}",  # firstname.lastname
+                    f"{name_parts[0][0]}{name_parts[-1]}",  # flastname
+                ]
+                variations = list(set(potential_usernames))
+                
+                # Use first name for primary platform search
+                platform_urls = username_analyzer.generate_platform_urls(name_parts[0])
+            else:
+                platform_urls = username_analyzer.generate_platform_urls(name.lower().replace(" ", ""))
+                variations = [name.lower().replace(" ", ""), name.lower().replace(" ", "_")]
+            
+            pattern_analysis = username_analyzer.analyze_patterns(display_username)
         
         # ---------------------------------------------------------------------
         # Risk Assessment
         # ---------------------------------------------------------------------
         risk_score, risk_level = calculate_risk_score(
-            username=username,
-            email_provided=bool(request.email),
-            phone_provided=bool(request.phone),
+            username=display_username,
+            email_provided=(identifier_type == IdentifierType.EMAIL),
+            phone_provided=(identifier_type == IdentifierType.PHONE),
             pattern_analysis=pattern_analysis,
             pii_count=len(extracted_pii.get("emails", [])) + len(extracted_pii.get("phones", []))
         )
@@ -212,8 +271,9 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         recommendations = generate_recommendations(
             risk_level=risk_level,
             pattern_analysis=pattern_analysis,
-            email_provided=bool(request.email),
-            phone_provided=bool(request.phone)
+            email_provided=(identifier_type == IdentifierType.EMAIL),
+            phone_provided=(identifier_type == IdentifierType.PHONE),
+            identifier_type=identifier_type.value
         )
         
         # ---------------------------------------------------------------------
@@ -225,7 +285,7 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         # Build Response
         # ---------------------------------------------------------------------
         return AnalyzeResponse(
-            username=username,
+            username=display_username,
             platform_urls=platform_urls,
             variations=variations,
             pattern_analysis=pattern_analysis,
@@ -451,7 +511,8 @@ def generate_recommendations(
     risk_level: str,
     pattern_analysis: Dict[str, Any],
     email_provided: bool,
-    phone_provided: bool
+    phone_provided: bool,
+    identifier_type: str = "username"
 ) -> list:
     """
     Generate personalized recommendations based on analysis results.
@@ -461,6 +522,7 @@ def generate_recommendations(
         pattern_analysis: Results from username pattern analysis
         email_provided: Whether email was provided
         phone_provided: Whether phone was provided
+        identifier_type: Type of identifier searched (username/email/phone/name)
     
     Returns:
         list: List of recommendation strings
@@ -485,15 +547,29 @@ def generate_recommendations(
             "Regularly search for your username to monitor for impersonation"
         )
     
-    # PII-specific recommendations
-    if email_provided:
+    # Identifier-type specific recommendations
+    if identifier_type == "email" or email_provided:
         recommendations.append(
             "Check if your email has been involved in data breaches at haveibeenpwned.com"
         )
+        recommendations.append(
+            "Consider using email aliases for different services"
+        )
     
-    if phone_provided:
+    if identifier_type == "phone" or phone_provided:
         recommendations.append(
             "Be cautious about sharing your phone number publicly"
+        )
+        recommendations.append(
+            "Consider using a secondary number for online registrations"
+        )
+    
+    if identifier_type == "name":
+        recommendations.append(
+            "Search for your name in quotes on search engines to find mentions"
+        )
+        recommendations.append(
+            "Set up Google Alerts for your name to monitor new mentions"
         )
     
     # Pattern-specific recommendations

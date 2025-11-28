@@ -9,9 +9,9 @@
  * InputForm Component
  * 
  * Features:
- * - Username input (required)
- * - Optional email, phone, name inputs
- * - Form validation
+ * - Single identifier input with type selector
+ * - Support for username, email, phone, or name
+ * - Form validation based on selected type
  * - Loading state during submission
  * - Error display
  * - Privacy notice
@@ -31,13 +31,21 @@ function InputForm({ onSubmit, isLoading }) {
   const { t } = useLanguage();
 
   // ---------------------------------------------------------------------------
+  // Identifier Types Configuration
+  // ---------------------------------------------------------------------------
+  const identifierTypes = [
+    { value: 'username', label: 'Username', icon: '👤', placeholder: 'e.g., john_doe' },
+    { value: 'email', label: 'Email', icon: '📧', placeholder: 'e.g., john@example.com' },
+    { value: 'phone', label: 'Phone Number', icon: '📱', placeholder: 'e.g., 0771234567' },
+    { value: 'name', label: 'Name', icon: '📝', placeholder: 'e.g., John Perera' }
+  ];
+
+  // ---------------------------------------------------------------------------
   // State
   // ---------------------------------------------------------------------------
   const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    phone: '',
-    name: ''
+    identifier: '',
+    identifierType: 'username'
   });
 
   const [errors, setErrors] = useState({});
@@ -50,7 +58,6 @@ function InputForm({ onSubmit, isLoading }) {
    * Validate email format
    */
   const validateEmail = (email) => {
-    if (!email) return true; // Optional field
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     return emailRegex.test(email);
   };
@@ -59,36 +66,67 @@ function InputForm({ onSubmit, isLoading }) {
    * Validate Sri Lankan phone number
    */
   const validatePhone = (phone) => {
-    if (!phone) return true; // Optional field
     // Remove all non-digit characters except +
     const cleaned = phone.replace(/[^\d+]/g, '');
-    // Check for Sri Lankan formats
+    // Check for Sri Lankan formats or general formats
     return (
       (cleaned.length === 10 && cleaned.startsWith('07')) ||
       (cleaned.length === 12 && cleaned.startsWith('+947')) ||
-      (cleaned.length === 13 && cleaned.startsWith('00947'))
+      (cleaned.length === 13 && cleaned.startsWith('00947')) ||
+      (cleaned.length >= 10 && cleaned.length <= 15) // Allow international numbers
     );
   };
 
   /**
-   * Validate entire form
+   * Validate username
+   */
+  const validateUsername = (username) => {
+    return username.trim().length >= 1;
+  };
+
+  /**
+   * Validate name
+   */
+  const validateName = (name) => {
+    return name.trim().length >= 2;
+  };
+
+  /**
+   * Validate entire form based on identifier type
    */
   const validateForm = () => {
     const newErrors = {};
+    const { identifier, identifierType } = formData;
 
-    // Username is required
-    if (!formData.username.trim()) {
-      newErrors.username = t('analyze.errors.usernameRequired');
+    if (!identifier.trim()) {
+      newErrors.identifier = 'This field is required';
+      setErrors(newErrors);
+      return false;
     }
 
-    // Email validation (if provided)
-    if (formData.email && !validateEmail(formData.email)) {
-      newErrors.email = t('analyze.errors.invalidEmail');
-    }
-
-    // Phone validation (if provided)
-    if (formData.phone && !validatePhone(formData.phone)) {
-      newErrors.phone = t('analyze.errors.invalidPhone');
+    switch (identifierType) {
+      case 'email':
+        if (!validateEmail(identifier)) {
+          newErrors.identifier = 'Please enter a valid email address';
+        }
+        break;
+      case 'phone':
+        if (!validatePhone(identifier)) {
+          newErrors.identifier = 'Please enter a valid phone number';
+        }
+        break;
+      case 'username':
+        if (!validateUsername(identifier)) {
+          newErrors.identifier = 'Please enter a valid username';
+        }
+        break;
+      case 'name':
+        if (!validateName(identifier)) {
+          newErrors.identifier = 'Please enter a valid name (at least 2 characters)';
+        }
+        break;
+      default:
+        break;
     }
 
     setErrors(newErrors);
@@ -110,12 +148,21 @@ function InputForm({ onSubmit, isLoading }) {
     }));
 
     // Clear error for this field
-    if (errors[name]) {
-      setErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
+    if (errors.identifier) {
+      setErrors({});
     }
+  };
+
+  /**
+   * Handle identifier type change
+   */
+  const handleTypeChange = (type) => {
+    setFormData(prev => ({
+      ...prev,
+      identifierType: type,
+      identifier: '' // Clear input when type changes
+    }));
+    setErrors({});
   };
 
   /**
@@ -125,9 +172,17 @@ function InputForm({ onSubmit, isLoading }) {
     e.preventDefault();
 
     if (validateForm()) {
-      onSubmit(formData);
+      // Transform form data to API format
+      const apiData = {
+        identifier: formData.identifier.trim(),
+        identifier_type: formData.identifierType
+      };
+      onSubmit(apiData);
     }
   };
+
+  // Get current type config
+  const currentType = identifierTypes.find(t => t.value === formData.identifierType);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -135,95 +190,74 @@ function InputForm({ onSubmit, isLoading }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* -----------------------------------------------------------------
-       * Username Field (Required)
+       * Identifier Type Selector
        * ----------------------------------------------------------------- */}
       <div>
-        <label htmlFor="username" className="form-label">
-          {t('analyze.form.username.label')} <span className="text-red-500">*</span>
+        <label className="form-label mb-3">
+          What are you searching with?
         </label>
-        <input
-          type="text"
-          id="username"
-          name="username"
-          value={formData.username}
-          onChange={handleChange}
-          placeholder={t('analyze.form.username.placeholder')}
-          className={`form-input ${errors.username ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : ''}`}
-          disabled={isLoading}
-        />
-        {errors.username ? (
-          <p className="mt-1 text-sm text-red-500">{errors.username}</p>
-        ) : (
-          <p className="mt-1 text-sm text-gray-500">{t('analyze.form.username.hint')}</p>
-        )}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {identifierTypes.map((type) => (
+            <button
+              key={type.value}
+              type="button"
+              onClick={() => handleTypeChange(type.value)}
+              disabled={isLoading}
+              className={`
+                p-3 rounded-xl border-2 transition-all duration-200
+                flex flex-col items-center justify-center space-y-1
+                ${formData.identifierType === type.value
+                  ? 'border-blue-500 bg-blue-50 text-blue-700'
+                  : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50'
+                }
+                ${isLoading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+              `}
+            >
+              <span className="text-2xl">{type.icon}</span>
+              <span className="text-sm font-medium">{type.label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* -----------------------------------------------------------------
-       * Email Field (Optional)
+       * Identifier Input Field
        * ----------------------------------------------------------------- */}
       <div>
-        <label htmlFor="email" className="form-label">
-          {t('analyze.form.email.label')}
+        <label htmlFor="identifier" className="form-label">
+          Enter your {currentType?.label.toLowerCase()} <span className="text-red-500">*</span>
         </label>
-        <input
-          type="email"
-          id="email"
-          name="email"
-          value={formData.email}
-          onChange={handleChange}
-          placeholder={t('analyze.form.email.placeholder')}
-          className={`form-input ${errors.email ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : ''}`}
-          disabled={isLoading}
-        />
-        {errors.email ? (
-          <p className="mt-1 text-sm text-red-500">{errors.email}</p>
+        <div className="relative">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl">
+            {currentType?.icon}
+          </span>
+          <input
+            type={formData.identifierType === 'email' ? 'email' : formData.identifierType === 'phone' ? 'tel' : 'text'}
+            id="identifier"
+            name="identifier"
+            value={formData.identifier}
+            onChange={handleChange}
+            placeholder={currentType?.placeholder}
+            className={`form-input pl-12 ${errors.identifier ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : ''}`}
+            disabled={isLoading}
+            autoComplete="off"
+          />
+        </div>
+        {errors.identifier ? (
+          <p className="mt-2 text-sm text-red-500 flex items-center">
+            <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            {errors.identifier}
+          </p>
         ) : (
-          <p className="mt-1 text-sm text-gray-500">{t('analyze.form.email.hint')}</p>
+          <p className="mt-2 text-sm text-gray-500">
+            {formData.identifierType === 'username' && 'Enter the username you want to analyze across social platforms'}
+            {formData.identifierType === 'email' && 'We\'ll check for potential exposure and linked accounts'}
+            {formData.identifierType === 'phone' && 'Sri Lankan formats supported (07X-XXXXXXX or +94)'}
+            {formData.identifierType === 'name' && 'Enter your full name for identity-based searches'}
+          </p>
         )}
-      </div>
-
-      {/* -----------------------------------------------------------------
-       * Phone Field (Optional)
-       * ----------------------------------------------------------------- */}
-      <div>
-        <label htmlFor="phone" className="form-label">
-          {t('analyze.form.phone.label')}
-        </label>
-        <input
-          type="tel"
-          id="phone"
-          name="phone"
-          value={formData.phone}
-          onChange={handleChange}
-          placeholder={t('analyze.form.phone.placeholder')}
-          className={`form-input ${errors.phone ? 'border-red-500 focus:border-red-500 focus:ring-red-200' : ''}`}
-          disabled={isLoading}
-        />
-        {errors.phone ? (
-          <p className="mt-1 text-sm text-red-500">{errors.phone}</p>
-        ) : (
-          <p className="mt-1 text-sm text-gray-500">{t('analyze.form.phone.hint')}</p>
-        )}
-      </div>
-
-      {/* -----------------------------------------------------------------
-       * Name Field (Optional)
-       * ----------------------------------------------------------------- */}
-      <div>
-        <label htmlFor="name" className="form-label">
-          {t('analyze.form.name.label')}
-        </label>
-        <input
-          type="text"
-          id="name"
-          name="name"
-          value={formData.name}
-          onChange={handleChange}
-          placeholder={t('analyze.form.name.placeholder')}
-          className="form-input"
-          disabled={isLoading}
-        />
-        <p className="mt-1 text-sm text-gray-500">{t('analyze.form.name.hint')}</p>
       </div>
 
       {/* -----------------------------------------------------------------
@@ -259,7 +293,12 @@ function InputForm({ onSubmit, isLoading }) {
             <span>{t('analyze.form.analyzing')}</span>
           </span>
         ) : (
-          t('analyze.form.submit')
+          <span className="flex items-center justify-center space-x-2">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <span>Start Analysis</span>
+          </span>
         )}
       </button>
     </form>
