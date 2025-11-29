@@ -71,6 +71,19 @@ Digital Footprint Analyzer is designed to help Sri Lankan citizens:
 - **Impersonation Scoring** - Calculate likelihood of fake profiles (0-100 score)
 - **Fuzzy String Matching** - Match names and bios with typo tolerance using Levenshtein, Jaro-Winkler algorithms
 
+### 📱 Social Media Analysis (Phase 3)
+- **Profile URL Generator** - Generate direct profile URLs for Facebook, Instagram, LinkedIn, X
+- **Profile Existence Checker** - Check if profiles exist on platforms via HTTP requests
+- **Profile Data Collector** - Extract public data from profile pages (name, bio, profile image)
+- **Username Variations** - Generate potential impersonation usernames with URLs
+
+### 📞 Sri Lankan Phone Lookup (Phase 3)
+- **Phone Validation** - Validate Sri Lankan mobile (07X) and landline formats
+- **Carrier Identification** - Identify carrier (Dialog, Mobitel, Airtel, Hutch) from prefix
+- **Area Code Lookup** - Identify landline regions (Colombo, Kandy, Galle, etc.)
+- **E.164 Normalization** - Convert to international format (+94XXXXXXXXX)
+- **Display Formatting** - Generate local and international display formats
+
 ## 🛠️ Tech Stack
 
 ### Backend
@@ -83,6 +96,8 @@ Digital Footprint Analyzer is designed to help Sri Lankan citizens:
 | **Uvicorn** | ASGI server |
 | **rapidfuzz** | Fast fuzzy string matching for correlation |
 | **indic-nlp-library** | Sinhala to English transliteration |
+| **httpx** | Async HTTP client for profile checking |
+| **BeautifulSoup4** | HTML parsing for profile data extraction |
 
 ### Frontend
 | Technology | Purpose |
@@ -124,11 +139,17 @@ DigitalFootprintAnalyzer/
 │   │   │   │   ├── grapheme_map.py     # Variant rules for spelling alternatives
 │   │   │   │   ├── name_dictionary.py  # Sri Lankan names
 │   │   │   │   └── location_dictionary.py # Sri Lankan places
-│   │   │   └── correlation/            # Phase 2
+│   │   │   ├── correlation/            # Phase 2
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── correlator.py       # Cross-platform correlation
+│   │   │   │   ├── fuzzy_matcher.py    # Fuzzy string matching
+│   │   │   │   └── similarity_scorer.py # Similarity calculations
+│   │   │   └── social/                 # Phase 3
 │   │   │       ├── __init__.py
-│   │   │       ├── correlator.py       # Cross-platform correlation
-│   │   │       ├── fuzzy_matcher.py    # Fuzzy string matching
-│   │   │       └── similarity_scorer.py # Similarity calculations
+│   │   │       ├── profile_generator.py  # Profile URL generation
+│   │   │       ├── profile_checker.py    # Profile existence checking
+│   │   │       ├── data_collector.py     # Profile data collection
+│   │   │       └── phone_lookup.py       # Sri Lankan phone lookup
 │   │   └── models/
 │   │       ├── __init__.py
 │   │       └── schemas.py
@@ -137,7 +158,9 @@ DigitalFootprintAnalyzer/
 │   │   ├── test_pii_extractor.py
 │   │   ├── test_username_analyzer.py
 │   │   ├── test_transliteration.py     # Phase 2
-│   │   └── test_correlation.py         # Phase 2
+│   │   ├── test_correlation.py         # Phase 2
+│   │   ├── test_profile_generator.py   # Phase 3
+│   │   └── test_phone_lookup.py        # Phase 3
 │   ├── requirements.txt
 │   ├── Dockerfile
 │   └── .env.example
@@ -272,6 +295,11 @@ DigitalFootprintAnalyzer/
 | `POST` | `/api/analyze-username` | Analyze username patterns |
 | `POST` | `/api/transliterate` | Transliterate Sinhala text to English |
 | `POST` | `/api/correlate` | Correlate profiles across platforms |
+| `POST` | `/api/generate-profile-urls` | Generate profile URLs for all platforms |
+| `POST` | `/api/check-profiles` | Check if profiles exist on platforms |
+| `POST` | `/api/collect-profile-data` | Collect public data from profile pages |
+| `POST` | `/api/phone-lookup` | Sri Lankan phone number lookup |
+| `POST` | `/api/full-scan` | Combined comprehensive analysis |
 
 ### Main Analysis Request
 
@@ -392,6 +420,97 @@ POST /api/correlate
 }
 ```
 
+### Profile URL Generation Request (Phase 3)
+
+```json
+POST /api/generate-profile-urls
+{
+  "username": "john_doe",
+  "include_variations": true
+}
+```
+
+### Profile URL Generation Response
+
+```json
+{
+  "username": "john_doe",
+  "urls": {
+    "facebook": {"name": "Facebook", "url": "https://www.facebook.com/john_doe"},
+    "instagram": {"name": "Instagram", "url": "https://www.instagram.com/john_doe/"},
+    "linkedin": {"name": "LinkedIn", "url": "https://www.linkedin.com/in/john_doe"},
+    "x": {"name": "X (Twitter)", "url": "https://x.com/john_doe"}
+  },
+  "variations": [
+    {"username": "johndoe", "urls": {...}},
+    {"username": "john.doe", "urls": {...}}
+  ]
+}
+```
+
+### Phone Lookup Request (Phase 3)
+
+```json
+POST /api/phone-lookup
+{
+  "phone": "0771234567"
+}
+```
+
+### Phone Lookup Response
+
+```json
+{
+  "original": "0771234567",
+  "valid": true,
+  "type": "mobile",
+  "carrier": "Dialog",
+  "e164_format": "+94771234567",
+  "local_format": "077-123-4567",
+  "international_format": "+94 77 123 4567",
+  "error": null
+}
+```
+
+### Full Scan Request (Phase 3)
+
+```json
+POST /api/full-scan
+{
+  "username": "john_doe",
+  "phone": "0771234567",
+  "email": "john@example.com",
+  "name": "John Perera"
+}
+```
+
+### Full Scan Response
+
+```json
+{
+  "profile_urls": {
+    "facebook": {"name": "Facebook", "url": "..."},
+    ...
+  },
+  "profile_existence": {
+    "username": "john_doe",
+    "results": {...},
+    "summary": {"exists": 2, "not_found": 1, "error": 1}
+  },
+  "phone_analysis": {
+    "valid": true,
+    "type": "mobile",
+    "carrier": "Dialog",
+    ...
+  },
+  "risk_score": 45,
+  "recommendations": [
+    "Review privacy settings on all identified social media profiles",
+    "Regularly search for your username to monitor for impersonation"
+  ]
+}
+```
+
 ## 🧪 Testing
 
 ### Backend Tests
@@ -404,7 +523,8 @@ pytest tests/ -v
 ### Test Summary
 - **Phase 1 Tests**: 72 tests (PII extraction, username analysis)
 - **Phase 2 Tests**: 44 tests (transliteration, correlation)
-- **Total**: 116 tests passing ✅
+- **Phase 3 Tests**: 68 tests (profile generator, phone lookup)
+- **Total**: 239 tests passing ✅
 
 ### Test Coverage
 
@@ -446,13 +566,17 @@ pytest tests/ -v --cov=app
 - [x] Frontend components (TransliterationDisplay, CorrelationMatrix, ImpersonationAlert)
 - [x] 44 additional tests (116 total)
 
-### Phase 3 (Planned)
-- [ ] Social media data collection
-- [ ] Profile existence checking
-- [ ] Data breach integration (HaveIBeenPwned API)
-- [ ] Extended platform support
+### Phase 3 ✅ Complete
+- [x] Profile URL Generator - Generate URLs for Facebook, Instagram, LinkedIn, X
+- [x] Profile Existence Checker - Verify if profiles exist using HTTP requests
+- [x] Social Media Data Collector - Extract public profile data (name, bio, image)
+- [x] Phone Number Lookup - Sri Lankan phone validation & carrier identification
+- [x] Full Scan API - Combined endpoint for comprehensive analysis
+- [x] New API endpoints (generate-profile-urls, check-profiles, collect-profile-data, phone-lookup, full-scan)
+- [x] 68 additional tests (239 total)
 
 ### Phase 4 (Future)
+- [ ] Data breach integration (HaveIBeenPwned API)
 - [ ] Machine learning for impersonation detection
 - [ ] Browser extension
 - [ ] Mobile application

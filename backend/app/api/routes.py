@@ -13,12 +13,17 @@ This module defines the following endpoints:
 - POST /api/extract-pii - Extract PII from provided text
 - POST /api/analyze-username - Analyze username and generate platform URLs
 - GET /api/health - Health check for monitoring
+- POST /api/generate-profile-urls - Generate profile URLs (Phase 3)
+- POST /api/check-profiles - Check profile existence (Phase 3)
+- POST /api/collect-profile-data - Collect profile data (Phase 3)
+- POST /api/phone-lookup - Phone number lookup (Phase 3)
+- POST /api/full-scan - Full scan analysis (Phase 3)
 
 Each endpoint includes comprehensive error handling and validation.
 """
 
 from fastapi import APIRouter, HTTPException, status
-from typing import Dict, Any
+from typing import Dict, Any, List
 import time
 import logging
 
@@ -40,6 +45,17 @@ from app.models.schemas import (
     CorrelationRequest,
     CorrelationResponse,
     PlatformProfile,
+    # Phase 3 schemas
+    ProfileURLRequest,
+    ProfileURLResponse,
+    ProfileCheckRequest,
+    ProfileCheckResponse,
+    DataCollectionRequest,
+    DataCollectionResponse,
+    PhoneLookupRequest,
+    PhoneLookupResponse,
+    FullScanRequest,
+    FullScanResponse,
 )
 
 # Import services
@@ -48,6 +64,13 @@ from app.services.ner_engine import NEREngine
 from app.services.username_analyzer import UsernameAnalyzer
 from app.services.transliteration import SinhalaTransliterator
 from app.services.correlation import CrossPlatformCorrelator
+# Phase 3 services
+from app.services.social import (
+    ProfileURLGenerator,
+    ProfileExistenceChecker,
+    SocialMediaDataCollector,
+    PhoneNumberLookup,
+)
 
 
 # =============================================================================
@@ -63,6 +86,11 @@ ner_engine = NEREngine()
 username_analyzer = UsernameAnalyzer()
 sinhala_transliterator = SinhalaTransliterator()
 cross_platform_correlator = CrossPlatformCorrelator()
+# Phase 3 service instances
+profile_url_generator = ProfileURLGenerator()
+profile_checker = ProfileExistenceChecker()
+data_collector = SocialMediaDataCollector()
+phone_lookup = PhoneNumberLookup()
 
 
 # =============================================================================
@@ -95,13 +123,17 @@ async def health_check() -> HealthResponse:
     """
     return HealthResponse(
         status="healthy",
-        version="1.0.0",
+        version="2.0.0",
         services={
             "pii_extractor": "operational",
             "ner_engine": "operational",
             "username_analyzer": "operational",
             "sinhala_transliterator": "operational",
-            "cross_platform_correlator": "operational"
+            "cross_platform_correlator": "operational",
+            "profile_url_generator": "operational",
+            "profile_checker": "operational",
+            "data_collector": "operational",
+            "phone_lookup": "operational"
         }
     )
 
@@ -772,3 +804,411 @@ async def correlate_profiles(request: CorrelationRequest) -> CorrelationResponse
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred during correlation: {str(e)}"
         )
+
+
+# =============================================================================
+# PROFILE URL GENERATION ENDPOINT (Phase 3)
+# =============================================================================
+
+@router.post(
+    "/generate-profile-urls",
+    response_model=ProfileURLResponse,
+    summary="Generate Profile URLs",
+    description="""
+    Generate direct profile URLs for a username across all supported
+    social media platforms (Facebook, Instagram, LinkedIn, X).
+    
+    Optionally includes username variations for comprehensive searching.
+    """
+)
+async def generate_profile_urls(request: ProfileURLRequest) -> ProfileURLResponse:
+    """
+    Generate profile URLs for all supported platforms.
+    
+    Args:
+        request: ProfileURLRequest containing username and options
+    
+    Returns:
+        ProfileURLResponse: URLs for all platforms and optional variations
+    
+    Example:
+        Input: {"username": "john_doe", "include_variations": true}
+        Output: {"username": "john_doe", "urls": {...}, "variations": [...]}
+    """
+    try:
+        username = request.username
+        
+        # Generate URLs for all platforms
+        urls = profile_url_generator.generate_urls(username)
+        
+        # Generate variations if requested
+        variations = None
+        if request.include_variations:
+            variations = profile_url_generator.generate_variations(username)
+        
+        return ProfileURLResponse(
+            username=username,
+            urls=urls,
+            variations=variations
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in generate_profile_urls endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during URL generation: {str(e)}"
+        )
+
+
+# =============================================================================
+# PROFILE CHECK ENDPOINT (Phase 3)
+# =============================================================================
+
+@router.post(
+    "/check-profiles",
+    response_model=ProfileCheckResponse,
+    summary="Check Profile Existence",
+    description="""
+    Check if profiles exist on specified or all supported platforms.
+    
+    Returns status for each platform: exists, not_found, private, or error.
+    """
+)
+async def check_profiles(request: ProfileCheckRequest) -> ProfileCheckResponse:
+    """
+    Check if profiles exist on social media platforms.
+    
+    Args:
+        request: ProfileCheckRequest containing username and optional platforms
+    
+    Returns:
+        ProfileCheckResponse: Check results for each platform
+    
+    Example:
+        Input: {"username": "john_doe", "platforms": ["instagram", "facebook"]}
+        Output: {"username": "john_doe", "results": {...}, "summary": {...}}
+    """
+    try:
+        result = await profile_checker.check_all_platforms(
+            request.username,
+            request.platforms
+        )
+        
+        return ProfileCheckResponse(
+            username=result["username"],
+            results=result["results"],
+            summary=result["summary"]
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in check_profiles endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during profile checking: {str(e)}"
+        )
+
+
+# =============================================================================
+# DATA COLLECTION ENDPOINT (Phase 3)
+# =============================================================================
+
+@router.post(
+    "/collect-profile-data",
+    response_model=DataCollectionResponse,
+    summary="Collect Profile Data",
+    description="""
+    Collect public data from a social media profile page.
+    
+    Extracts name, bio, profile image, and location from Open Graph meta tags.
+    """
+)
+async def collect_profile_data(request: DataCollectionRequest) -> DataCollectionResponse:
+    """
+    Collect public data from a profile URL.
+    
+    Args:
+        request: DataCollectionRequest containing URL and platform
+    
+    Returns:
+        DataCollectionResponse: Extracted profile data
+    
+    Example:
+        Input: {"url": "https://instagram.com/john_doe/", "platform": "instagram"}
+        Output: {"name": "John Doe", "bio": "...", "profile_image": "...", ...}
+    """
+    try:
+        result = await data_collector.collect_profile_data(
+            request.url,
+            request.platform
+        )
+        
+        return DataCollectionResponse(
+            url=result["url"],
+            platform=result["platform"],
+            name=result["name"],
+            bio=result["bio"],
+            profile_image=result["profile_image"],
+            location=result["location"],
+            success=result["success"],
+            error=result["error"]
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in collect_profile_data endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during data collection: {str(e)}"
+        )
+
+
+# =============================================================================
+# PHONE LOOKUP ENDPOINT (Phase 3)
+# =============================================================================
+
+@router.post(
+    "/phone-lookup",
+    response_model=PhoneLookupResponse,
+    summary="Phone Number Lookup",
+    description="""
+    Lookup Sri Lankan phone number information.
+    
+    Validates the number, identifies carrier/region, and provides
+    formatted versions (E.164, local, international).
+    """
+)
+async def phone_lookup_endpoint(request: PhoneLookupRequest) -> PhoneLookupResponse:
+    """
+    Perform Sri Lankan phone number lookup.
+    
+    Args:
+        request: PhoneLookupRequest containing the phone number
+    
+    Returns:
+        PhoneLookupResponse: Validation and carrier information
+    
+    Example:
+        Input: {"phone": "0771234567"}
+        Output: {
+            "valid": true,
+            "type": "mobile",
+            "carrier": "Dialog",
+            "e164_format": "+94771234567",
+            ...
+        }
+    """
+    try:
+        result = phone_lookup.lookup(request.phone)
+        
+        return PhoneLookupResponse(
+            original=result["original"],
+            valid=result["valid"],
+            type=result["type"],
+            carrier=result["carrier"],
+            e164_format=result["e164_format"],
+            local_format=result["local_format"],
+            international_format=result["international_format"],
+            error=result["error"]
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in phone_lookup endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during phone lookup: {str(e)}"
+        )
+
+
+# =============================================================================
+# FULL SCAN ENDPOINT (Phase 3)
+# =============================================================================
+
+@router.post(
+    "/full-scan",
+    response_model=FullScanResponse,
+    summary="Full Digital Footprint Scan",
+    description="""
+    Perform a comprehensive digital footprint scan including:
+    - Profile URL generation for all platforms
+    - Profile existence checking
+    - Phone number analysis (if provided)
+    - PII analysis from email/name (if provided)
+    - Risk assessment and recommendations
+    """
+)
+async def full_scan(request: FullScanRequest) -> FullScanResponse:
+    """
+    Perform comprehensive digital footprint scan.
+    
+    Combines all available analysis methods for a complete assessment.
+    
+    Args:
+        request: FullScanRequest with username and optional phone/email/name
+    
+    Returns:
+        FullScanResponse: Complete analysis results
+    
+    Example:
+        Input: {
+            "username": "john_doe",
+            "phone": "0771234567",
+            "email": "john@example.com"
+        }
+        Output: {
+            "profile_urls": {...},
+            "profile_existence": {...},
+            "phone_analysis": {...},
+            "risk_score": 45,
+            "recommendations": [...]
+        }
+    """
+    try:
+        start_time = time.time()
+        
+        # Generate profile URLs
+        profile_urls = profile_url_generator.generate_urls(request.username)
+        
+        # Check profile existence
+        existence_result = await profile_checker.check_all_platforms(request.username)
+        
+        # Phone analysis if provided
+        phone_analysis = None
+        if request.phone:
+            phone_analysis = phone_lookup.lookup(request.phone)
+        
+        # PII analysis if email or name provided
+        pii_analysis = None
+        if request.email or request.name:
+            pii_text = ""
+            if request.email:
+                pii_text += f" {request.email}"
+            if request.name:
+                pii_text += f" {request.name}"
+            
+            pii_extracted = pii_extractor.extract_all(pii_text.strip())
+            ner_results = ner_engine.extract_entities(pii_text.strip())
+            
+            pii_analysis = {
+                "extracted_pii": pii_extracted,
+                "ner_entities": ner_results
+            }
+        
+        # Calculate risk score
+        risk_score = _calculate_full_scan_risk(
+            existence_result=existence_result,
+            phone_analysis=phone_analysis,
+            pii_analysis=pii_analysis
+        )
+        
+        # Generate recommendations
+        recommendations = _generate_full_scan_recommendations(
+            existence_result=existence_result,
+            phone_analysis=phone_analysis,
+            pii_analysis=pii_analysis,
+            risk_score=risk_score
+        )
+        
+        return FullScanResponse(
+            profile_urls=profile_urls,
+            profile_existence=existence_result,
+            phone_analysis=phone_analysis,
+            pii_analysis=pii_analysis,
+            risk_score=risk_score,
+            recommendations=recommendations
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in full_scan endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during full scan: {str(e)}"
+        )
+
+
+def _calculate_full_scan_risk(
+    existence_result: Dict[str, Any],
+    phone_analysis: Dict[str, Any] = None,
+    pii_analysis: Dict[str, Any] = None
+) -> int:
+    """
+    Calculate risk score for full scan.
+    
+    Factors:
+    - Number of platforms where profile exists
+    - Phone number validity and exposure
+    - PII found in provided data
+    """
+    score = 10  # Base score
+    
+    # Add points for existing profiles
+    if existence_result:
+        summary = existence_result.get("summary", {})
+        exists_count = summary.get("exists", 0)
+        score += exists_count * 10  # 10 points per existing profile
+    
+    # Add points for phone number exposure
+    if phone_analysis and phone_analysis.get("valid"):
+        score += 15
+    
+    # Add points for PII
+    if pii_analysis:
+        extracted = pii_analysis.get("extracted_pii", {})
+        if extracted.get("emails"):
+            score += 10
+        if extracted.get("phones"):
+            score += 10
+    
+    return min(score, 100)
+
+
+def _generate_full_scan_recommendations(
+    existence_result: Dict[str, Any],
+    phone_analysis: Dict[str, Any] = None,
+    pii_analysis: Dict[str, Any] = None,
+    risk_score: int = 0
+) -> List[str]:
+    """
+    Generate recommendations based on full scan results.
+    """
+    recommendations = []
+    
+    # General recommendation
+    recommendations.append(
+        "Review privacy settings on all identified social media profiles"
+    )
+    
+    # Profile-based recommendations
+    if existence_result:
+        summary = existence_result.get("summary", {})
+        if summary.get("exists", 0) >= 3:
+            recommendations.append(
+                "Consider using unique usernames across platforms to reduce traceability"
+            )
+    
+    # Phone-based recommendations
+    if phone_analysis and phone_analysis.get("valid"):
+        recommendations.append(
+            "Be cautious about linking your phone number to social media accounts"
+        )
+        recommendations.append(
+            "Consider using a secondary number for online registrations"
+        )
+    
+    # Risk-based recommendations
+    if risk_score >= 70:
+        recommendations.append(
+            "High exposure detected - enable two-factor authentication on all accounts"
+        )
+        recommendations.append(
+            "Consider conducting a comprehensive privacy audit"
+        )
+    elif risk_score >= 40:
+        recommendations.append(
+            "Regularly search for your username to monitor for impersonation"
+        )
+    
+    # Always recommend periodic audit
+    recommendations.append(
+        "Conduct periodic audits of what personal information is publicly visible"
+    )
+    
+    return recommendations
