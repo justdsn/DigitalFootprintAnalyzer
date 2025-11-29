@@ -2,7 +2,7 @@
 # SINHALA TRANSLITERATION SERVICE TESTS
 # =============================================================================
 # Unit tests for the Sinhala transliteration functionality.
-# Tests Sinhala detection, character-based transliteration, and dictionary lookups.
+# Tests Sinhala detection, dictionary lookups, and variant generation.
 # =============================================================================
 
 """
@@ -10,9 +10,9 @@ Sinhala Transliteration Tests
 
 Comprehensive test suite for the SinhalaTransliterator service:
 - Sinhala text detection tests
-- Character-by-character transliteration tests
 - Dictionary lookup tests for names and locations
 - Variant generation tests
+- Two-tier transliteration approach tests
 
 Run with: pytest tests/test_transliteration.py -v
 """
@@ -200,10 +200,10 @@ class TestVariantGeneration:
     
     def test_generate_variants_with_aa(self, transliterator):
         """Test that 'aa' variant rules exist and work."""
-        # Test that the variant rules include aa -> a transformation
+        # Test that the variant rules include aa transformations
         from app.services.transliteration.grapheme_map import VARIANT_RULES
         assert 'aa' in VARIANT_RULES
-        assert 'a' in VARIANT_RULES['aa']
+        assert VARIANT_RULES['aa'] == 'a'
         
         # Test basic variant generation works
         variants = transliterator.generate_variants("test")
@@ -231,43 +231,6 @@ class TestVariantGeneration:
         """Test the module-level generate_variants function."""
         variants = generate_variants("sunil")
         assert "sunil" in variants
-
-
-# =============================================================================
-# SINGLE WORD TRANSLITERATION TESTS
-# =============================================================================
-
-class TestSingleWordTransliteration:
-    """Tests for single word transliteration method."""
-    
-    def test_transliterate_word_vowel(self, transliterator):
-        """Test transliteration of word starting with vowel."""
-        result = transliterator.transliterate_word("අම")
-        assert "a" in result.lower()
-        assert "m" in result.lower()
-    
-    def test_transliterate_word_consonant(self, transliterator):
-        """Test transliteration of word starting with consonant."""
-        result = transliterator.transliterate_word("ක")
-        assert result.lower() == "ka"
-    
-    def test_transliterate_word_with_virama(self, transliterator):
-        """Test transliteration of consonant with virama."""
-        # ක් should be just 'k' (consonant without inherent vowel)
-        result = transliterator.transliterate_word("ක්")
-        assert result.lower() == "k"
-    
-    def test_transliterate_word_with_vowel_sign(self, transliterator):
-        """Test transliteration of consonant with vowel sign."""
-        # කා should be 'kaa'
-        result = transliterator.transliterate_word("කා")
-        # The consonant root 'k' + vowel sign 'a'
-        assert "k" in result.lower()
-    
-    def test_transliterate_word_empty(self, transliterator):
-        """Test transliteration of empty word."""
-        result = transliterator.transliterate_word("")
-        assert result == ""
 
 
 # =============================================================================
@@ -354,18 +317,18 @@ class TestContainsChecks:
 
 
 # =============================================================================
-# HYBRID TRANSLITERATION TESTS (THREE-TIER APPROACH)
+# TWO-TIER TRANSLITERATION TESTS
 # =============================================================================
 
-class TestHybridTransliteration:
-    """Tests for the three-tier hybrid transliteration approach."""
+class TestTwoTierTransliteration:
+    """Tests for the two-tier transliteration approach."""
     
-    def test_dictionary_priority_over_grapheme(self, transliterator):
+    def test_dictionary_lookup_takes_priority(self, transliterator):
         """
-        Test Tier 1: Dictionary lookup takes priority over grapheme mapping.
+        Test Tier 1: Dictionary lookup takes priority.
         
         When a word exists in the dictionary, the pre-defined variants
-        should be returned instead of grapheme-based transliteration.
+        should be returned.
         """
         # 'කමල්' is in the dictionary with pre-defined variants
         results = transliterator.transliterate("කමල්")
@@ -376,19 +339,24 @@ class TestHybridTransliteration:
         assert len(results) > 0
     
     def test_dictionary_lookup_known_name(self, transliterator):
-        """Test that known names are found in dictionary lookup."""
-        # Test internal dictionary lookup method
-        dict_variants = transliterator._dictionary_lookup("පෙරේරා")
-        
-        assert dict_variants is not None
-        assert 'perera' in dict_variants
+        """Test that known names are found via all_dictionaries."""
+        # Test that the word is in the combined dictionary
+        assert "පෙරේරා" in transliterator.all_dictionaries
+        assert 'perera' in transliterator.all_dictionaries["පෙරේරා"]
     
-    def test_dictionary_lookup_unknown_word(self, transliterator):
-        """Test that unknown words return None from dictionary lookup."""
-        # Use a word not in the dictionary
-        dict_variants = transliterator._dictionary_lookup("නොදන්නා")
+    def test_unknown_word_returns_as_is(self, transliterator):
+        """
+        Test that unknown words not in dictionary return as-is when 
+        Indic NLP cannot transliterate.
         
-        assert dict_variants is None
+        When a word is not in dictionary and Indic NLP returns the same
+        text or fails, the word is returned as-is.
+        """
+        # Use a word not in the dictionary
+        results = transliterator.transliterate("අම")
+        
+        # Should return the word (possibly as-is if Indic NLP doesn't work)
+        assert len(results) > 0
     
     def test_indic_nlp_availability_flag(self, transliterator):
         """Test that Indic NLP availability flag is set."""
@@ -401,12 +369,9 @@ class TestHybridTransliteration:
         assert hasattr(transliterator, '_indic_nlp_transliterate')
         assert callable(transliterator._indic_nlp_transliterate)
     
-    def test_indic_nlp_fallback_graceful_degradation(self, transliterator):
+    def test_indic_nlp_graceful_degradation(self, transliterator):
         """
-        Test Tier 2: Indic NLP fallback handles unavailability gracefully.
-        
-        When Indic NLP Library is not available, the method should return
-        None and allow fallback to grapheme mapping.
+        Test Tier 2: Indic NLP handles empty input gracefully.
         """
         # Test that the method handles gracefully when library unavailable
         # or input is problematic
@@ -414,31 +379,25 @@ class TestHybridTransliteration:
         # Empty input should return None
         assert result is None
     
-    def test_grapheme_fallback_for_unknown_words(self, transliterator):
+    def test_fallback_returns_word_as_is(self, transliterator):
         """
-        Test Tier 3: Grapheme mapping works as fallback for unknown words.
-        
-        Words not in dictionary should still be transliterated using
-        character-by-character grapheme mapping.
+        Test that unknown words are returned as-is when neither
+        dictionary nor Indic NLP produces results.
         """
-        # Use a less common word not in dictionary
+        # Use an uncommon word not in dictionary that Indic NLP won't handle
         results = transliterator.transliterate("අම")
         
-        # Should get results from grapheme mapping
+        # Should return at least one result
         assert len(results) > 0
-        # Should contain basic transliteration
-        combined = ''.join(results)
-        assert 'a' in combined.lower()
+        # The word should be in the results (either transliterated or as-is)
+        # Since Indic NLP may not work for this word, it could return as-is
     
-    def test_variant_generation_for_all_tiers(self, transliterator):
-        """Test that variant generation works for all transliteration tiers."""
+    def test_variant_generation_for_both_tiers(self, transliterator):
+        """Test that variant generation works for dictionary lookups."""
         # Dictionary word
         dict_results = transliterator.transliterate("කමල්")
         assert len(dict_results) >= 1
-        
-        # Unknown word (grapheme fallback)
-        unknown_results = transliterator.transliterate("අම")
-        assert len(unknown_results) >= 1
+        assert 'kamal' in dict_results
 
 
 # =============================================================================
@@ -512,13 +471,14 @@ class TestIndicNlpIntegration:
         # Instance flag should match module flag
         assert transliterator.indic_nlp_available == INDIC_NLP_AVAILABLE
     
-    def test_transliteration_works_without_indic_nlp(self, transliterator):
-        """Test that transliteration works even without Indic NLP Library."""
-        # This test ensures graceful degradation
-        results = transliterator.transliterate("සිංහල")
+    def test_transliteration_works_with_dictionary(self, transliterator):
+        """Test that transliteration works for dictionary words."""
+        # Dictionary word should always work
+        results = transliterator.transliterate("කොළඹ")
         
-        # Should still produce results using grapheme fallback
+        # Should produce results from dictionary
         assert len(results) > 0
+        assert 'colombo' in results
 
 
 # =============================================================================

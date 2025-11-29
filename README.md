@@ -46,25 +46,23 @@ Digital Footprint Analyzer is designed to help Sri Lankan citizens:
 - **English** - Full English language support
 - **Sinhala (සිංහල)** - Complete Sinhala translation for all UI text
 
-### 🔤 Sinhala Transliteration Engine (Phase 2 - Hybrid Approach)
-- **Three-Tier Hybrid Transliteration** - Advanced multi-tier approach for accurate transliteration:
-  - **Tier 1 - Dictionary Lookup**: Custom dictionaries for known Sri Lankan names/locations
-  - **Tier 2 - Indic NLP Library**: Linguistically-informed transliteration for unknown words
-  - **Tier 3 - Grapheme Mapping**: Character-by-character fallback for edge cases
+### 🔤 Sinhala Transliteration Engine (Phase 2 - Two-Tier Approach)
+- **Two-Tier Transliteration** - Simple and effective approach for accurate transliteration:
+  - **Tier 1 - Dictionary Lookup**: Custom dictionaries for known Sri Lankan names/locations (50+ names, 50+ locations)
+  - **Tier 2 - Indic NLP Library**: Linguistically-informed transliteration for unknown Sinhala words
 - **Sinhala to English Conversion** - Convert Sinhala Unicode text (දුෂාන්) to romanized English (dushan)
 - **Multiple Spelling Variants** - Generate alternative spellings (dushan, dushaan, dusan)
 - **Name Dictionary** - 50+ common Sri Lankan first names and surnames with pre-defined transliterations
 - **Location Dictionary** - 50+ Sri Lankan cities and towns with transliteration variants
 - **Automatic Detection** - Automatically detect Sinhala Unicode text (U+0D80-U+0DFF range)
-- **Graceful Degradation** - Works reliably even when optional dependencies unavailable
+- **Graceful Fallback** - Returns word as-is if not in dictionary and Indic NLP unavailable
 
-#### Benefits of Hybrid Approach
+#### Benefits of Two-Tier Approach
 | Benefit | Description |
 |---------|-------------|
 | **High Accuracy** | Dictionary lookup ensures accurate results for common names |
 | **Linguistic Correctness** | Indic NLP provides proper handling of complex phonemes |
-| **Robustness** | Grapheme fallback handles edge cases and unknown characters |
-| **Graceful Degradation** | Engine works even without optional Indic NLP dependency |
+| **Simplicity** | Clean, maintainable codebase without complex fallbacks |
 
 ### 🔗 Cross-Platform Correlation (Phase 2)
 - **Profile Comparison** - Compare PII across Facebook, Instagram, X, LinkedIn profiles
@@ -84,7 +82,7 @@ Digital Footprint Analyzer is designed to help Sri Lankan citizens:
 | **Pydantic** | Data validation and settings management |
 | **Uvicorn** | ASGI server |
 | **rapidfuzz** | Fast fuzzy string matching for correlation |
-| **indic-nlp-library** | Indic language NLP for hybrid Sinhala transliteration |
+| **indic-nlp-library** | Sinhala to English transliteration |
 
 ### Frontend
 | Technology | Purpose |
@@ -123,7 +121,7 @@ DigitalFootprintAnalyzer/
 │   │   │   ├── transliteration/        # Phase 2
 │   │   │   │   ├── __init__.py
 │   │   │   │   ├── sinhala_engine.py   # Main transliteration logic
-│   │   │   │   ├── grapheme_map.py     # Sinhala character mappings
+│   │   │   │   ├── grapheme_map.py     # Variant rules for spelling alternatives
 │   │   │   │   ├── name_dictionary.py  # Sri Lankan names
 │   │   │   │   └── location_dictionary.py # Sri Lankan places
 │   │   │   └── correlation/            # Phase 2
@@ -438,8 +436,8 @@ pytest tests/ -v --cov=app
 - [x] 72 tests passing
 
 ### Phase 2 ✅ Complete
-- [x] Sinhala → English transliteration engine
-- [x] Grapheme mapping for Sinhala Unicode characters
+- [x] Sinhala → English transliteration engine (two-tier approach)
+- [x] Indic NLP Library integration for unknown words
 - [x] Name dictionary (50+ Sri Lankan names)
 - [x] Location dictionary (50+ Sri Lankan places)
 - [x] Cross-platform PII correlation
