@@ -43,6 +43,7 @@ class ProfileURLGenerator:
     
     Attributes:
         PLATFORMS: Dictionary of supported platforms with URL templates
+        VARIATION_SUFFIXES: List of common number suffixes for variations
     """
     
     # -------------------------------------------------------------------------
@@ -66,6 +67,12 @@ class ProfileURLGenerator:
             "url_template": "https://x.com/{username}"
         }
     }
+    
+    # -------------------------------------------------------------------------
+    # VARIATION CONFIGURATION
+    # -------------------------------------------------------------------------
+    # Common number suffixes used for username variations
+    VARIATION_SUFFIXES = ["1", "2", "123", "007"]
     
     def __init__(self):
         """Initialize the Profile URL Generator."""
@@ -221,9 +228,9 @@ class ProfileURLGenerator:
         # Trailing underscore
         variations.add(f"{clean_username.lower()}_")
         
-        # Common number suffixes
+        # Common number suffixes (using class constant)
         base = clean_username.replace('_', '').replace('.', '').lower()
-        for suffix in ["1", "2", "123", "007"]:
+        for suffix in self.VARIATION_SUFFIXES:
             variations.add(f"{base}{suffix}")
         
         # Remove empty strings

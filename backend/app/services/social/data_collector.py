@@ -18,6 +18,7 @@ Features:
 - Extract data using Open Graph meta tags
 - Platform-specific parsing for better accuracy
 - Handle missing or malformed data gracefully
+- URL validation to prevent SSRF attacks
 
 Example Usage:
     collector = SocialMediaDataCollector()
@@ -30,6 +31,7 @@ Example Usage:
 
 import re
 from typing import Dict, Optional, Any
+from urllib.parse import urlparse
 import logging
 
 try:
@@ -57,6 +59,10 @@ class SocialMediaDataCollector:
     2. Extract data from Open Graph meta tags
     3. Parse platform-specific HTML elements
     
+    Security:
+    - Only allows requests to whitelisted social media domains
+    - Validates URL format before making requests
+    
     Supported data extraction:
     - Display name
     - Bio/description
@@ -64,19 +70,46 @@ class SocialMediaDataCollector:
     - Location
     """
     
-    # Default User-Agent
-    DEFAULT_USER_AGENT = (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    )
+    # Import shared User-Agent from profile_checker
+    from .profile_checker import ProfileExistenceChecker
+    DEFAULT_USER_AGENT = ProfileExistenceChecker.DEFAULT_USER_AGENT
     
     # Request timeout
     REQUEST_TIMEOUT = 15.0
     
+    # Allowed domains for SSRF protection
+    ALLOWED_DOMAINS = {
+        "facebook": ["www.facebook.com", "facebook.com", "m.facebook.com"],
+        "instagram": ["www.instagram.com", "instagram.com"],
+        "linkedin": ["www.linkedin.com", "linkedin.com"],
+        "x": ["x.com", "www.x.com", "twitter.com", "www.twitter.com"]
+    }
+    
     def __init__(self):
         """Initialize the Social Media Data Collector."""
         pass
+    
+    def _is_url_allowed(self, url: str, platform: str) -> bool:
+        """
+        Check if URL is from an allowed domain.
+        
+        Args:
+            url: URL to validate
+            platform: Platform ID
+        
+        Returns:
+            bool: True if URL is from allowed domain
+        """
+        try:
+            parsed = urlparse(url)
+            host = parsed.netloc.lower()
+            
+            # Get allowed domains for platform
+            allowed = self.ALLOWED_DOMAINS.get(platform, [])
+            
+            return host in allowed
+        except Exception:
+            return False
     
     async def collect_profile_data(
         self,
@@ -88,6 +121,9 @@ class SocialMediaDataCollector:
         
         Fetches the profile page and extracts available public information
         using Open Graph meta tags and platform-specific parsing.
+        
+        Security: Only allows requests to whitelisted social media domains
+        to prevent SSRF attacks.
         
         Args:
             url: The profile URL to collect data from
@@ -145,6 +181,11 @@ class SocialMediaDataCollector:
         
         if not url:
             result["error"] = "URL is required"
+            return result
+        
+        # SSRF protection: validate URL is from allowed domain
+        if not self._is_url_allowed(url, platform):
+            result["error"] = f"URL domain not allowed for platform {platform}"
             return result
         
         try:
