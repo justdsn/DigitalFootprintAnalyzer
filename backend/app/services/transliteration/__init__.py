@@ -3,16 +3,20 @@
 # =============================================================================
 # This package contains the Sinhala transliteration engine and supporting
 # dictionaries for converting Sinhala text to romanized English.
+# Uses a two-tier approach: Dictionary + Indic NLP Library.
 # =============================================================================
 
 """
 Transliteration Package
 
-This package provides Sinhala to English transliteration capabilities:
+This package provides Sinhala to English transliteration capabilities
+using a simple two-tier approach:
+  - Tier 1: Dictionary lookup for known names/locations
+  - Tier 2: Indic NLP Library for unknown Sinhala words
 
 Modules:
 - sinhala_engine.py: Main SinhalaTransliterator class
-- grapheme_map.py: Sinhala Unicode character mappings
+- grapheme_map.py: Variant rules for spelling alternatives
 - name_dictionary.py: Common Sri Lankan names with variants
 - location_dictionary.py: Sri Lankan locations with variants
 
@@ -38,9 +42,6 @@ from .sinhala_engine import (
 )
 
 from .grapheme_map import (
-    VOWELS,
-    CONSONANTS,
-    VOWEL_SIGNS,
     VARIANT_RULES,
     VARIANT_RULES_EXTENDED,
     SINHALA_UNICODE_START,
@@ -79,10 +80,7 @@ __all__ = [
     "search_name_by_romanized",
     "search_location_by_romanized",
     
-    # Character mappings
-    "VOWELS",
-    "CONSONANTS",
-    "VOWEL_SIGNS",
+    # Variant rules (for variant generation)
     "VARIANT_RULES",
     "VARIANT_RULES_EXTENDED",
     

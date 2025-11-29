@@ -1,19 +1,18 @@
 # =============================================================================
-# SINHALA TRANSLITERATION ENGINE (HYBRID APPROACH)
+# SINHALA TRANSLITERATION ENGINE (TWO-TIER APPROACH)
 # =============================================================================
 # Main transliteration service for converting Sinhala text to romanized English.
-# Implements a three-tier hybrid approach combining:
-#   1. Custom dictionaries for known names/locations
-#   2. Indic NLP Library for unknown Sinhala words
-#   3. Grapheme mapping as fallback
+# Implements a simple two-tier approach:
+#   1. Dictionary Lookup - Names and locations
+#   2. Indic NLP Library - For all other Sinhala text
 # Supports names, locations, and general text with spelling variant generation.
 # =============================================================================
 
 """
-Sinhala Transliteration Engine (Hybrid Approach)
+Sinhala Transliteration Engine (Two-Tier Approach)
 
 This module provides comprehensive Sinhala to English transliteration
-capabilities using a three-tier hybrid approach:
+capabilities using a simple two-tier approach:
 
 Tier 1 - Dictionary Lookup:
     - Checks custom dictionaries for known Sri Lankan names and locations
@@ -24,18 +23,12 @@ Tier 2 - Indic NLP Library:
     - Uses UnicodeIndicTransliterator for unknown Sinhala words
     - Provides linguistically-informed transliteration using established
       Indic NLP algorithms
-    - Falls back gracefully if library is unavailable
+    - If unavailable and word not in dictionary, returns word as-is
 
-Tier 3 - Grapheme Mapping:
-    - Character-by-character transliteration as final fallback
-    - Uses comprehensive Sinhala Unicode to English mappings
-    - Handles edge cases and mixed-script text
-
-Benefits of Hybrid Approach:
+Benefits:
     - High accuracy for common names (dictionary lookup)
     - Linguistic correctness for unknown words (Indic NLP)
-    - Robust fallback for edge cases (grapheme mapping)
-    - Graceful degradation when dependencies unavailable
+    - Simple and maintainable codebase
 
 Example Usage:
     transliterator = SinhalaTransliterator()
@@ -43,7 +36,7 @@ Example Usage:
     # Check if text is Sinhala
     is_sinhala = transliterator.is_sinhala("සුනිල්")  # True
     
-    # Transliterate text (uses hybrid approach automatically)
+    # Transliterate text (uses two-tier approach automatically)
     results = transliterator.transliterate("සුනිල් පෙරේරා")
     # Returns: ['sunil perera', 'suneel perera', ...]
 """
@@ -51,13 +44,8 @@ Example Usage:
 import re
 from typing import List, Optional, Set, Tuple
 
-# Import grapheme mappings
+# Import variant rules only (grapheme mapping removed)
 from .grapheme_map import (
-    VOWELS,
-    CONSONANTS,
-    CONSONANT_ROOTS,
-    VOWEL_SIGNS,
-    SPECIAL_CHARS,
     VARIANT_RULES,
     VARIANT_RULES_EXTENDED,
     SINHALA_UNICODE_START,
@@ -72,12 +60,12 @@ from .location_dictionary import LOCATION_DICTIONARY, get_location_variants
 # =============================================================================
 # INDIC NLP LIBRARY INTEGRATION
 # =============================================================================
-# Attempt to import Indic NLP Library for enhanced transliteration.
+# Attempt to import Indic NLP Library for transliteration of unknown words.
 # The library provides UnicodeIndicTransliterator for Sinhala→Latin conversion.
-# If unavailable, the engine falls back to grapheme-based transliteration.
+# If unavailable, unknown words (not in dictionary) are returned as-is.
 # =============================================================================
 
-# Flag to track Indic NLP Library availability for graceful degradation
+# Flag to track Indic NLP Library availability
 INDIC_NLP_AVAILABLE = False
 
 try:
@@ -86,8 +74,7 @@ try:
     from indicnlp.transliterate.unicode_transliterate import UnicodeIndicTransliterator
     INDIC_NLP_AVAILABLE = True
 except ImportError:
-    # Indic NLP Library not installed - will use grapheme fallback
-    # This ensures the engine works even without the optional dependency
+    # Indic NLP Library not installed - unknown words will be returned as-is
     UnicodeIndicTransliterator = None
 
 
@@ -112,6 +99,7 @@ class SinhalaTransliterator:
     
     This class provides methods for detecting Sinhala text and converting
     it to romanized English with support for multiple spelling variants.
+    Uses a simple two-tier approach: dictionary lookup + Indic NLP Library.
     
     Attributes:
         name_dict: Dictionary of Sri Lankan names with variants
@@ -130,13 +118,14 @@ class SinhalaTransliterator:
         """
         Initialize the Sinhala Transliterator with dictionaries and rules.
         
-        Sets up the hybrid transliteration engine with:
+        Sets up the two-tier transliteration engine with:
         - Name and location dictionaries for Tier 1 lookup
         - Indic NLP Library integration for Tier 2 (if available)
         - Extended variant rules for comprehensive spelling variant generation
         
-        The engine automatically detects Indic NLP Library availability
-        and falls back to grapheme mapping when necessary.
+        The engine automatically detects Indic NLP Library availability.
+        If Indic NLP is unavailable and word is not in dictionary, 
+        the word is returned as-is.
         """
         # Load dictionaries for Tier 1 - Dictionary lookup
         self.name_dict = NAME_DICTIONARY
@@ -151,6 +140,11 @@ class SinhalaTransliterator:
         
         # Build combined lookup for fast dictionary matching
         self._build_lookup_cache()
+        
+        # Build combined dictionary for _transliterate_word
+        self.all_dictionaries = {}
+        self.all_dictionaries.update(self.name_dict)
+        self.all_dictionaries.update(self.location_dict)
     
     def _build_lookup_cache(self) -> None:
         """
@@ -274,9 +268,9 @@ class SinhalaTransliterator:
     
     def _transliterate_word(self, word: str) -> List[str]:
         """
-        Transliterate a single Sinhala word using three-tier hybrid approach.
+        Transliterate a single Sinhala word using two-tier approach.
         
-        This method implements the hybrid transliteration strategy:
+        This method implements the simple two-tier transliteration strategy:
         
         Tier 1 - Dictionary Lookup:
             First checks custom dictionaries for known Sri Lankan names
@@ -287,11 +281,7 @@ class SinhalaTransliterator:
             uses UnicodeIndicTransliterator for linguistically-informed
             transliteration of unknown Sinhala words.
         
-        Tier 3 - Grapheme Mapping:
-            Falls back to character-by-character transliteration using
-            the comprehensive Sinhala grapheme mappings.
-        
-        All approaches generate spelling variants for fuzzy matching support.
+        If neither works, the word is returned as-is.
         
         Args:
             word: Single Sinhala word to transliterate
@@ -304,40 +294,23 @@ class SinhalaTransliterator:
         # Priority given to custom dictionaries for accurate Sri Lankan
         # name/location transliteration with pre-defined variants
         # ---------------------------------------------------------------------
-        dict_variants = self._dictionary_lookup(word)
-        if dict_variants:
-            return dict_variants
+        if word in self.all_dictionaries:
+            return self.all_dictionaries[word].copy()
         
         # ---------------------------------------------------------------------
         # TIER 2: Indic NLP Library for unknown Sinhala words
         # Uses linguistically-informed transliteration algorithms when
-        # the library is available, providing better results than
-        # simple character mapping for complex Sinhala phonemes
+        # the library is available
         # ---------------------------------------------------------------------
-        indic_transliteration = self._indic_nlp_transliterate(word)
-        if indic_transliteration:
-            # Generate variants from Indic NLP result for fuzzy matching
-            variants = self.generate_variants(indic_transliteration)
-            if indic_transliteration not in variants:
-                variants.insert(0, indic_transliteration)
-            return variants
+        if INDIC_NLP_AVAILABLE and self.is_sinhala(word):
+            result = self._indic_nlp_transliterate(word)
+            if result:
+                return self.generate_variants(result)
         
         # ---------------------------------------------------------------------
-        # TIER 3: Grapheme mapping as fallback
-        # Character-by-character transliteration using comprehensive
-        # Sinhala Unicode mappings - ensures robustness when other
-        # methods are unavailable or fail
+        # If neither works, return word as-is
         # ---------------------------------------------------------------------
-        base_transliteration = self.transliterate_word(word)
-        
-        # Generate variants from base transliteration for fuzzy matching
-        variants = self.generate_variants(base_transliteration)
-        
-        # Always include the base transliteration
-        if base_transliteration not in variants:
-            variants.insert(0, base_transliteration)
-        
-        return variants
+        return [word]
     
     def _indic_nlp_transliterate(self, word: str) -> Optional[str]:
         """
@@ -357,35 +330,17 @@ class SinhalaTransliterator:
             return None
         
         try:
-            # Use Indic NLP transliterator: Sinhala (si) to Latin (la)
+            # Use Indic NLP transliterator: Sinhala (si) to English (en)
             # The library handles complex phoneme mappings and conjuncts
-            result = UnicodeIndicTransliterator.transliterate(word, 'si', 'la')
+            result = UnicodeIndicTransliterator.transliterate(word, 'si', 'en')
             
-            # Return lowercase for consistent matching
-            return result.lower() if result else None
+            # Check if transliteration produced a different result (not just original text)
+            if result and result != word:
+                return result.lower()
+            return None
         except Exception:
             # Graceful degradation if transliteration fails
-            # Fall through to grapheme mapping in calling method
             return None
-    
-    def _dictionary_lookup(self, word: str) -> Optional[List[str]]:
-        """
-        Look up a word in the name/location dictionaries.
-        
-        Args:
-            word: Sinhala word to look up
-            
-        Returns:
-            List[str] or None: Dictionary variants if found, None otherwise
-        """
-        # Strip any punctuation
-        clean_word = word.strip()
-        
-        # Check combined lookup cache
-        if clean_word in self.lookup_cache:
-            return self.lookup_cache[clean_word].copy()
-        
-        return None
     
     def _combine_word_variants(self, word_variants: List[List[str]]) -> List[str]:
         """
@@ -423,100 +378,6 @@ class SinhalaTransliterator:
             results = new_results
         
         return results
-    
-    # =========================================================================
-    # CHARACTER-LEVEL TRANSLITERATION
-    # =========================================================================
-    
-    def transliterate_word(self, word: str) -> str:
-        """
-        Transliterate a single Sinhala word character by character.
-        
-        Handles:
-        - Independent vowels
-        - Consonants with inherent vowels
-        - Consonant + vowel sign combinations
-        - Special characters (anusvara, visarga)
-        - Virama (hal kirīma) for consonant-only sounds
-        
-        Args:
-            word: Single Sinhala word to transliterate
-            
-        Returns:
-            str: Romanized transliteration of the word
-            
-        Example:
-            >>> transliterator.transliterate_word("සිංහල")
-            'sinhala'
-        """
-        if not word:
-            return ''
-        
-        result = []
-        i = 0
-        
-        while i < len(word):
-            char = word[i]
-            
-            # Skip non-Sinhala characters
-            if not is_sinhala_char(char):
-                if char not in ['\u200d', '\u200c']:  # Skip ZWJ/ZWNJ
-                    result.append(char)
-                i += 1
-                continue
-            
-            # Handle independent vowels
-            if char in VOWELS:
-                result.append(VOWELS[char])
-                i += 1
-                continue
-            
-            # Handle special characters (anusvara, visarga)
-            if char in SPECIAL_CHARS:
-                result.append(SPECIAL_CHARS[char])
-                i += 1
-                continue
-            
-            # Handle consonants
-            if char in CONSONANTS:
-                # Get consonant root
-                consonant_root = CONSONANT_ROOTS.get(char, CONSONANTS[char][:-1])
-                
-                # Check what follows
-                if i + 1 < len(word):
-                    next_char = word[i + 1]
-                    
-                    # Check for virama (hal kirīma)
-                    if next_char == '්':
-                        result.append(consonant_root)
-                        i += 2
-                        continue
-                    
-                    # Check for vowel sign
-                    if next_char in VOWEL_SIGNS:
-                        vowel_sound = VOWEL_SIGNS[next_char]
-                        if vowel_sound:  # Not virama
-                            result.append(consonant_root + vowel_sound)
-                        else:
-                            result.append(consonant_root)
-                        i += 2
-                        continue
-                
-                # Consonant with inherent 'a' vowel
-                result.append(CONSONANTS[char])
-                i += 1
-                continue
-            
-            # Handle standalone vowel signs (shouldn't occur normally)
-            if char in VOWEL_SIGNS:
-                result.append(VOWEL_SIGNS[char])
-                i += 1
-                continue
-            
-            # Unknown character - skip
-            i += 1
-        
-        return ''.join(result)
     
     # =========================================================================
     # VARIANT GENERATION
