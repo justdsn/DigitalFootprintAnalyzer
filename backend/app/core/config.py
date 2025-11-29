@@ -60,8 +60,12 @@ class Settings(BaseSettings):
     # Default origins for development - add production domains in .env
     CORS_ORIGINS: List[str] = [
         "http://localhost:3000",      # React development server
+        "http://localhost:3001",      # Alternative port
+        "http://localhost:3002",      # Alternative port
         "http://localhost:8080",      # Alternative frontend port
         "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
+        "http://127.0.0.1:3002",
         "http://127.0.0.1:8080",
     ]
     

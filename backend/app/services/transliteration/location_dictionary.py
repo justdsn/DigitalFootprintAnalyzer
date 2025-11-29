@@ -72,8 +72,9 @@ MAJOR_CITIES = {
     'මිරිස්ස': ['mirissa', 'mirissah'],
     
     # Western Province cities
-    'නිගම්බො': ['negombo', 'negomboh'],
+    'මීගමුව': ['negombo', 'nigombo'],
     'ගම්පහ': ['gampaha', 'gampahah'],
+    'කොළඹ': ['colombo', 'kolamba', 'cmb', 'CMB'],
     'කඳාන': ['kandana', 'kadana'],
     'කළුතර': ['kalutara', 'kaluturah'],
     'පානදුර': ['panadura', 'panadurah'],
@@ -99,9 +100,9 @@ MAJOR_CITIES = {
     
     # Uva Province cities
     'බණ්ඩාරවෙල': ['bandarawela', 'bandarawelah'],
-    'එල්ල': ['ella', 'ellah'],
-    'වැල්ලවාය': ['wellawaya', 'wellawayah'],
-    'මොනරාගල': ['moneragala', 'monaragalah'],
+    'එල්ල': ['ella', 'alla'],
+    'වැල්ලවාය': ['wellawaya', 'wallawaya'],
+    'මොනරාගල': ['moneragala', 'monaragala'],
     
     # North Western Province cities
     'කුරුණෑගල': ['kurunegala', 'kurunegalah'],
