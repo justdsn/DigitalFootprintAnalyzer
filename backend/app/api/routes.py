@@ -57,6 +57,10 @@ from app.models.schemas import (
     PhoneLookupResponse,
     FullScanRequest,
     FullScanResponse,
+    # Phase 3 Enhancement schemas
+    ExposedPIIItem,
+    PlatformExposure,
+    ExposureScanResponse,
 )
 
 # Import services
@@ -71,6 +75,8 @@ from app.services.social import (
     ProfileExistenceChecker,
     SocialMediaDataCollector,
     PhoneNumberLookup,
+    PIIExposureAnalyzer,
+    scrape_all_platforms,
 )
 
 
@@ -92,6 +98,8 @@ profile_url_generator = ProfileURLGenerator()
 profile_checker = ProfileExistenceChecker()
 data_collector = SocialMediaDataCollector()
 phone_lookup = PhoneNumberLookup()
+# Phase 3 Enhancement services
+exposure_analyzer = PIIExposureAnalyzer()
 
 
 # =============================================================================
@@ -1578,3 +1586,140 @@ def _generate_full_scan_recommendations(
     )
     
     return recommendations
+
+
+# =============================================================================
+# EXPOSURE SCAN ENDPOINT (Phase 3 Enhancement)
+# =============================================================================
+
+@router.post(
+    "/exposure-scan",
+    response_model=ExposureScanResponse,
+    summary="PII Exposure Scan",
+    description="""
+    Perform a comprehensive PII exposure scan across social media platforms.
+    
+    This enhanced endpoint:
+    1. Generates profile URLs for the provided username
+    2. Checks profile existence on each platform
+    3. Scrapes existing profiles for public data
+    4. Extracts ALL PII from scraped data
+    5. Matches exposed data to user's provided identifiers
+    6. Returns a clear list of exactly what PII is exposed and where
+    
+    Returns detailed exposure report showing:
+    - Exactly what PII is exposed
+    - Which platforms expose each piece of PII
+    - Risk levels for each exposed item
+    - Whether exposed data matches user-provided identifiers
+    - Actionable recommendations
+    """
+)
+async def exposure_scan(request: FullScanRequest) -> ExposureScanResponse:
+    """
+    Perform comprehensive PII exposure scan.
+    
+    This endpoint analyzes a user's digital footprint across social media
+    platforms and shows exactly what personal information is publicly exposed.
+    
+    Args:
+        request: FullScanRequest with username and optional phone/email/name
+    
+    Returns:
+        ExposureScanResponse: Complete exposure analysis with clear PII listing
+    
+    Example:
+        Input: {
+            "username": "johnperera",
+            "phone": "0771234567",
+            "email": "john@gmail.com"
+        }
+        Output: {
+            "exposure_score": 72,
+            "risk_level": "high",
+            "exposed_pii": [
+                {"type": "phone", "value": "+94 77 123 4567", ...},
+                {"type": "email", "value": "john@gmail.com", ...}
+            ],
+            ...
+        }
+    """
+    try:
+        # Build user identifiers dict
+        user_identifiers = {
+            "username": request.username
+        }
+        if request.phone:
+            user_identifiers["phone"] = request.phone
+        if request.email:
+            user_identifiers["email"] = request.email
+        if request.name:
+            user_identifiers["name"] = request.name
+        
+        # Scrape all platforms for the username
+        platform_data = await scrape_all_platforms(request.username)
+        
+        # Analyze PII exposure
+        exposure_report = exposure_analyzer.analyze(platform_data, user_identifiers)
+        
+        # Phone analysis if provided
+        phone_analysis_result = None
+        if request.phone:
+            phone_analysis_result = phone_lookup.lookup(request.phone)
+        
+        # Convert exposed_pii to ExposedPIIItem models
+        exposed_pii_items = [
+            ExposedPIIItem(
+                type=item["type"],
+                value=item["value"],
+                platforms=item["platforms"],
+                platform_count=item["platform_count"],
+                risk_level=item["risk_level"],
+                matches_user_input=item["matches_user_input"]
+            )
+            for item in exposure_report.get("exposed_pii", [])
+        ]
+        
+        # Convert platform_breakdown to PlatformExposure models
+        platform_breakdown = {}
+        for platform, breakdown in exposure_report.get("platform_breakdown", {}).items():
+            platform_items = [
+                ExposedPIIItem(
+                    type=item["type"],
+                    value=item["value"],
+                    platforms=item["platforms"],
+                    platform_count=item["platform_count"],
+                    risk_level=item["risk_level"],
+                    matches_user_input=item["matches_user_input"]
+                )
+                for item in breakdown.get("exposed_items", [])
+            ]
+            platform_breakdown[platform] = PlatformExposure(
+                platform=breakdown["platform"],
+                status=breakdown["status"],
+                url=breakdown["url"],
+                exposed_count=breakdown["exposed_count"],
+                exposed_items=platform_items
+            )
+        
+        return ExposureScanResponse(
+            user_identifiers=user_identifiers,
+            scan_timestamp=exposure_report["scan_timestamp"],
+            platforms_checked=exposure_report["platforms_checked"],
+            profiles_found=exposure_report["profiles_found"],
+            profiles_not_found=exposure_report["profiles_not_found"],
+            exposure_score=exposure_report["exposure_score"],
+            risk_level=exposure_report["risk_level"],
+            total_exposed_items=exposure_report["total_exposed_items"],
+            exposed_pii=exposed_pii_items,
+            platform_breakdown=platform_breakdown,
+            phone_analysis=phone_analysis_result,
+            recommendations=exposure_report["recommendations"]
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in exposure_scan endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during exposure scan: {str(e)}"
+        )

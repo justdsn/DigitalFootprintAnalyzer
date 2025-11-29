@@ -1109,3 +1109,182 @@ class FullScanResponse(BaseModel):
         default_factory=list,
         description="Security and privacy recommendations"
     )
+
+
+# =============================================================================
+# EXPOSURE SCAN MODELS (Phase 3 Enhancement)
+# =============================================================================
+
+class ExposedPIIItem(BaseModel):
+    """
+    Single exposed PII item - shows exactly what's exposed.
+    
+    Attributes:
+        type: Type of PII (email, phone, name, location, workplace, etc.)
+        value: The actual exposed value
+        platforms: Which platforms expose this
+        platform_count: Number of platforms
+        risk_level: Risk level (critical, high, medium, low)
+        matches_user_input: Does this match user's provided identifier?
+    
+    Example:
+        {
+            "type": "phone",
+            "value": "+94 77 123 4567",
+            "platforms": ["facebook"],
+            "platform_count": 1,
+            "risk_level": "critical",
+            "matches_user_input": true
+        }
+    """
+    type: str = Field(
+        ...,
+        description="Type of PII (email, phone, name, location, workplace, etc.)"
+    )
+    value: str = Field(
+        ...,
+        description="The actual exposed value"
+    )
+    platforms: List[str] = Field(
+        ...,
+        description="Which platforms expose this PII"
+    )
+    platform_count: int = Field(
+        ...,
+        ge=0,
+        description="Number of platforms exposing this PII"
+    )
+    risk_level: str = Field(
+        ...,
+        description="Risk level: critical, high, medium, low"
+    )
+    matches_user_input: bool = Field(
+        ...,
+        description="Does this match user's provided identifier?"
+    )
+
+
+class PlatformExposure(BaseModel):
+    """
+    Exposure details for a single platform.
+    
+    Attributes:
+        platform: Platform name
+        status: Profile status (found, not_found, error)
+        url: Profile URL
+        exposed_count: Number of exposed PII items
+        exposed_items: List of exposed PII items on this platform
+    
+    Example:
+        {
+            "platform": "facebook",
+            "status": "found",
+            "url": "https://facebook.com/johnperera",
+            "exposed_count": 4,
+            "exposed_items": [...]
+        }
+    """
+    platform: str = Field(
+        ...,
+        description="Platform name"
+    )
+    status: str = Field(
+        ...,
+        description="Profile status: found, not_found, error"
+    )
+    url: str = Field(
+        ...,
+        description="Profile URL"
+    )
+    exposed_count: int = Field(
+        ...,
+        ge=0,
+        description="Number of exposed PII items"
+    )
+    exposed_items: List[ExposedPIIItem] = Field(
+        default_factory=list,
+        description="List of exposed PII items on this platform"
+    )
+
+
+class ExposureScanResponse(BaseModel):
+    """
+    Complete exposure scan response - clear PII listing for user.
+    
+    Shows users exactly what PII is exposed and where.
+    
+    Attributes:
+        user_identifiers: User's provided identifiers
+        scan_timestamp: When the scan was performed
+        platforms_checked: List of platforms checked
+        profiles_found: Platforms where profile was found
+        profiles_not_found: Platforms where profile was not found
+        exposure_score: Exposure risk score (0-100)
+        risk_level: Overall risk level
+        total_exposed_items: Total number of exposed PII items
+        exposed_pii: Clear list of exactly what PII is exposed
+        platform_breakdown: Per-platform exposure breakdown
+        phone_analysis: Phone analysis if phone was provided
+        recommendations: Actionable recommendations
+    
+    Example:
+        {
+            "user_identifiers": {"username": "johnperera", ...},
+            "exposure_score": 72,
+            "risk_level": "high",
+            "total_exposed_items": 7,
+            "exposed_pii": [...],
+            ...
+        }
+    """
+    user_identifiers: Dict[str, str] = Field(
+        ...,
+        description="User's provided identifiers"
+    )
+    scan_timestamp: str = Field(
+        ...,
+        description="ISO 8601 timestamp of when scan was performed"
+    )
+    platforms_checked: List[str] = Field(
+        ...,
+        description="List of platforms that were checked"
+    )
+    profiles_found: List[str] = Field(
+        ...,
+        description="Platforms where profile was found"
+    )
+    profiles_not_found: List[str] = Field(
+        ...,
+        description="Platforms where profile was not found"
+    )
+    exposure_score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Exposure risk score from 0 (low) to 100 (high)"
+    )
+    risk_level: str = Field(
+        ...,
+        description="Overall risk level: low, medium, high, critical"
+    )
+    total_exposed_items: int = Field(
+        ...,
+        ge=0,
+        description="Total number of exposed PII items"
+    )
+    exposed_pii: List[ExposedPIIItem] = Field(
+        ...,
+        description="Clear list of exactly what PII is exposed"
+    )
+    platform_breakdown: Dict[str, PlatformExposure] = Field(
+        ...,
+        description="Per-platform exposure breakdown"
+    )
+    phone_analysis: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Phone number analysis if phone was provided"
+    )
+    recommendations: List[str] = Field(
+        ...,
+        description="Actionable recommendations specific to exposed data"
+    )
