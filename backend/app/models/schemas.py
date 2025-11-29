@@ -90,17 +90,16 @@ class AnalyzeRequest(BaseModel):
     """
     Request model for the main analysis endpoint.
     
-    Contains a single identifier with its type for digital footprint analysis.
-    The identifier can be a username, email, phone number, or name.
+    Contains a single identifier for digital footprint analysis.
+    The system auto-detects the type (username, email, phone, or name).
     
     Attributes:
         identifier: The value to search/analyze (required)
-        identifier_type: The type of identifier (username, email, phone, name)
+        identifier_type: Optional - if not provided, will be auto-detected
     
     Example:
         {
-            "identifier": "john_doe",
-            "identifier_type": "username"
+            "identifier": "john_doe"
         }
     """
     identifier: str = Field(
@@ -110,9 +109,9 @@ class AnalyzeRequest(BaseModel):
         description="The identifier value to analyze",
         examples=["john_doe", "john@example.com", "0771234567", "John Perera"]
     )
-    identifier_type: IdentifierType = Field(
-        ...,
-        description="Type of identifier being searched",
+    identifier_type: Optional[IdentifierType] = Field(
+        default=None,
+        description="Type of identifier - auto-detected if not provided",
         examples=["username", "email", "phone", "name"]
     )
     
@@ -215,7 +214,8 @@ class AnalyzeResponse(BaseModel):
     username variations, PII extraction, NER results, and risk assessment.
     
     Attributes:
-        username: The analyzed username
+        identifier: The analyzed identifier value
+        identifier_type: Detected/provided identifier type
         platform_urls: Dict of platform URLs
         variations: List of username variations
         pattern_analysis: Analysis of username patterns
@@ -228,15 +228,20 @@ class AnalyzeResponse(BaseModel):
     
     Example:
         {
-            "username": "john_doe",
+            "identifier": "0771234567",
+            "identifier_type": "phone",
             "risk_score": 45,
             "risk_level": "medium",
             ...
         }
     """
-    username: str = Field(
+    identifier: str = Field(
         ...,
-        description="The analyzed username"
+        description="The analyzed identifier"
+    )
+    identifier_type: str = Field(
+        ...,
+        description="Type of identifier (username, email, phone, name)"
     )
     platform_urls: Dict[str, Dict[str, str]] = Field(
         ...,
@@ -253,6 +258,10 @@ class AnalyzeResponse(BaseModel):
     extracted_pii: Dict[str, Any] = Field(
         ...,
         description="Extracted PII from provided inputs"
+    )
+    potential_exposures: List[Dict[str, Any]] = Field(
+        default=[],
+        description="List of potential exposure points where identifier may be found"
     )
     ner_entities: Dict[str, List[str]] = Field(
         ...,

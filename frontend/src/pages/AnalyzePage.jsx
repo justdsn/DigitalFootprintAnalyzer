@@ -11,14 +11,6 @@ function AnalyzePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [identifier, setIdentifier] = useState('');
-  const [identifierType, setIdentifierType] = useState('username');
-
-  const identifierTypes = [
-    { value: 'username', label: 'Username', icon: '👤', placeholder: 'e.g., kasun_perera' },
-    { value: 'email', label: 'Email', icon: '📧', placeholder: 'e.g., kasun@gmail.com' },
-    { value: 'phone', label: 'Phone', icon: '📱', placeholder: 'e.g., 0771234567' },
-    { value: 'name', label: 'Name', icon: '📝', placeholder: 'e.g., Kasun Perera' }
-  ];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -31,9 +23,9 @@ function AnalyzePage() {
     setError(null);
 
     try {
+      // Send only the identifier - backend will auto-detect the type
       const results = await analyze({
-        identifier: identifier.trim(),
-        identifier_type: identifierType
+        identifier: identifier.trim()
       });
       navigate('/results', { state: { results } });
     } catch (err) {
@@ -44,18 +36,16 @@ function AnalyzePage() {
     }
   };
 
-  const currentType = identifierTypes.find(t => t.value === identifierType);
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white py-12 px-4">
       <div className="max-w-xl mx-auto">
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 mb-3">
-            Analyze Your Identity
+            Analyze Your Digital Footprint
           </h1>
           <p className="text-slate-600">
-            Enter any identifier to discover your digital footprint
+            Enter any identifier and we'll find your digital presence
           </p>
         </div>
 
@@ -72,55 +62,33 @@ function AnalyzePage() {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Type Selector */}
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-3">
-                What are you searching with?
-              </label>
-              <div className="grid grid-cols-4 gap-2">
-                {identifierTypes.map((type) => (
-                  <button
-                    key={type.value}
-                    type="button"
-                    onClick={() => {
-                      setIdentifierType(type.value);
-                      setIdentifier('');
-                      setError(null);
-                    }}
-                    className={`p-3 rounded-xl text-center transition-all duration-200 ${
-                      identifierType === type.value
-                        ? 'bg-blue-50 border-2 border-blue-500 text-blue-700'
-                        : 'bg-slate-50 border-2 border-transparent text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <span className="text-xl block mb-1">{type.icon}</span>
-                    <span className="text-xs font-medium">{type.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
             {/* Input Field */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Enter your {currentType?.label.toLowerCase()}
+                Enter username, email, phone, or name
               </label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl">
-                  {currentType?.icon}
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
                 </span>
                 <input
-                  type={identifierType === 'email' ? 'email' : identifierType === 'phone' ? 'tel' : 'text'}
+                  type="text"
                   value={identifier}
                   onChange={(e) => {
                     setIdentifier(e.target.value);
                     setError(null);
                   }}
-                  placeholder={currentType?.placeholder}
+                  placeholder="e.g., kasun_perera, kasun@gmail.com, 0771234567"
                   className="w-full pl-12 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
                   disabled={isLoading}
+                  autoComplete="off"
                 />
               </div>
+              <p className="mt-2 text-xs text-slate-500">
+                We'll automatically detect what type of identifier you entered
+              </p>
             </div>
 
             {/* Submit Button */}
@@ -140,7 +108,7 @@ function AnalyzePage() {
               ) : (
                 <span className="flex items-center justify-center gap-2">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                   </svg>
                   Start Analysis
                 </span>
@@ -157,14 +125,35 @@ function AnalyzePage() {
           </div>
         </div>
 
+        {/* What We Check */}
+        <div className="mt-10">
+          <p className="text-sm text-slate-500 text-center mb-4">What we analyze</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { icon: '👤', label: 'Usernames' },
+              { icon: '📧', label: 'Emails' },
+              { icon: '📱', label: 'Phone Numbers' },
+              { icon: '📝', label: 'Names' }
+            ].map((item) => (
+              <div
+                key={item.label}
+                className="flex flex-col items-center p-3 bg-white rounded-xl border border-slate-200"
+              >
+                <span className="text-2xl mb-1">{item.icon}</span>
+                <span className="text-xs text-slate-600">{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Supported Platforms */}
-        <div className="mt-10 text-center">
-          <p className="text-sm text-slate-500 mb-4">Supported platforms</p>
-          <div className="flex flex-wrap justify-center gap-4">
-            {['Facebook', 'Instagram', 'X (Twitter)', 'LinkedIn'].map((platform) => (
+        <div className="mt-8 text-center">
+          <p className="text-sm text-slate-500 mb-4">Checks across platforms</p>
+          <div className="flex flex-wrap justify-center gap-3">
+            {['Facebook', 'Instagram', 'X', 'LinkedIn', 'TikTok', 'YouTube'].map((platform) => (
               <span
                 key={platform}
-                className="px-4 py-2 bg-white rounded-lg border border-slate-200 text-sm text-slate-600"
+                className="px-3 py-1.5 bg-white rounded-lg border border-slate-200 text-xs text-slate-600"
               >
                 {platform}
               </span>

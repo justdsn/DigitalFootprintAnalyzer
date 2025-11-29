@@ -26,6 +26,7 @@ from fastapi import APIRouter, HTTPException, status
 from typing import Dict, Any, List
 import time
 import logging
+import re
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -193,7 +194,13 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
             )
         
         identifier = request.identifier.strip()
+        
+        # ---------------------------------------------------------------------
+        # Auto-detect Identifier Type (if not provided)
+        # ---------------------------------------------------------------------
         identifier_type = request.identifier_type
+        if identifier_type is None:
+            identifier_type = detect_identifier_type(identifier)
         
         # ---------------------------------------------------------------------
         # Initialize Results
@@ -203,6 +210,7 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         pattern_analysis = {}
         extracted_pii = {"emails": [], "phones": [], "urls": [], "mentions": []}
         ner_results = {"persons": [], "locations": [], "organizations": []}
+        potential_exposures = []
         
         # Determine the display username (for results)
         display_username = identifier
@@ -225,6 +233,9 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
             # Analyze patterns
             pattern_analysis = username_analyzer.analyze_patterns(username)
             
+            # Generate exposure points for username
+            potential_exposures = generate_username_exposures(username, platform_urls)
+            
         elif identifier_type == IdentifierType.EMAIL:
             # Email analysis
             email = identifier.lower()
@@ -238,6 +249,9 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
             
             # Add the email to extracted PII
             extracted_pii["emails"].append(email)
+            
+            # Generate exposure points for email
+            potential_exposures = generate_email_exposures(email, email_username, platform_urls)
             
         elif identifier_type == IdentifierType.PHONE:
             # Phone number analysis
@@ -264,8 +278,12 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
                 "has_numbers": True,
                 "has_letters": False,
                 "number_density": 1.0,
-                "has_suspicious_patterns": False
+                "has_suspicious_patterns": False,
+                "length": len(cleaned_phone)
             }
+            
+            # Generate exposure points for phone
+            potential_exposures = generate_phone_exposures(phone, normalized_phone or phone)
             
         elif identifier_type == IdentifierType.NAME:
             # Name-based analysis
@@ -296,6 +314,9 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
                 variations = [name.lower().replace(" ", ""), name.lower().replace(" ", "_")]
             
             pattern_analysis = username_analyzer.analyze_patterns(display_username)
+            
+            # Generate exposure points for name
+            potential_exposures = generate_name_exposures(name, variations, platform_urls)
         
         # ---------------------------------------------------------------------
         # Risk Assessment
@@ -328,11 +349,13 @@ async def analyze(request: AnalyzeRequest) -> AnalyzeResponse:
         # Build Response
         # ---------------------------------------------------------------------
         return AnalyzeResponse(
-            username=display_username,
+            identifier=identifier,
+            identifier_type=identifier_type.value,
             platform_urls=platform_urls,
             variations=variations,
             pattern_analysis=pattern_analysis,
             extracted_pii=extracted_pii,
+            potential_exposures=potential_exposures,
             ner_entities=ner_results,
             risk_score=risk_score,
             risk_level=risk_level,
@@ -482,6 +505,70 @@ async def analyze_username(request: UsernameAnalyzeRequest) -> UsernameAnalyzeRe
 # HELPER FUNCTIONS
 # =============================================================================
 
+def detect_identifier_type(identifier: str) -> IdentifierType:
+    """
+    Auto-detect the type of identifier based on its format.
+    
+    Detection rules (in order of priority):
+    1. Email: Contains @ and valid domain pattern
+    2. Phone: Mostly digits, matches phone patterns (Sri Lankan or international)
+    3. Name: Contains spaces and mostly letters (likely a full name)
+    4. Username: Default fallback
+    
+    Args:
+        identifier: The identifier string to analyze
+    
+    Returns:
+        IdentifierType: Detected type (EMAIL, PHONE, NAME, or USERNAME)
+    """
+    identifier = identifier.strip()
+    
+    # Email detection: contains @ with domain pattern
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if re.match(email_pattern, identifier):
+        return IdentifierType.EMAIL
+    
+    # Phone detection: Sri Lankan and international formats
+    # Remove common separators for analysis
+    cleaned = identifier.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    
+    # Sri Lankan phone patterns
+    # - 07XXXXXXXX (10 digits starting with 07)
+    # - +947XXXXXXXX (12 chars starting with +94)
+    # - 947XXXXXXXX (11 digits starting with 94)
+    # - 00947XXXXXXXX (13 digits starting with 0094)
+    sri_lankan_patterns = [
+        r'^07\d{8}$',           # 07XXXXXXXX
+        r'^\+947\d{8}$',        # +947XXXXXXXX
+        r'^947\d{8}$',          # 947XXXXXXXX  
+        r'^00947\d{8}$',        # 00947XXXXXXXX
+        r'^0\d{9}$',            # 0XXXXXXXXX (other local)
+    ]
+    
+    for pattern in sri_lankan_patterns:
+        if re.match(pattern, cleaned):
+            return IdentifierType.PHONE
+    
+    # International phone: mostly digits (at least 70% digits, 7+ digits)
+    digit_count = sum(1 for c in cleaned if c.isdigit())
+    if len(cleaned) >= 7 and digit_count / len(cleaned) >= 0.7:
+        # Additional check: starts with + or digit
+        if cleaned.startswith('+') or cleaned[0].isdigit():
+            return IdentifierType.PHONE
+    
+    # Name detection: contains space(s) and mostly letters
+    if ' ' in identifier:
+        letter_count = sum(1 for c in identifier if c.isalpha() or c.isspace())
+        if letter_count / len(identifier) >= 0.8:
+            # Check if it looks like a name (2+ parts, each starting with letter)
+            parts = identifier.split()
+            if len(parts) >= 2 and all(part[0].isalpha() for part in parts if part):
+                return IdentifierType.NAME
+    
+    # Default to username
+    return IdentifierType.USERNAME
+
+
 def calculate_risk_score(
     username: str,
     email_provided: bool,
@@ -630,6 +717,285 @@ def generate_recommendations(
     return recommendations
 
 
+def generate_username_exposures(username: str, platform_urls: Dict) -> List[Dict[str, Any]]:
+    """
+    Generate potential exposure points for a username.
+    
+    Args:
+        username: The username being analyzed
+        platform_urls: Generated platform URLs
+    
+    Returns:
+        List of exposure dictionaries
+    """
+    exposures = []
+    
+    # Social media exposures
+    for platform, data in platform_urls.items():
+        exposures.append({
+            "type": "social_media",
+            "source": data.get("name", platform.capitalize()),
+            "risk": "medium",
+            "description": f"Profile may exist on {data.get('name', platform.capitalize())}",
+            "url": data.get("url", ""),
+            "icon": platform
+        })
+    
+    # Search engine exposure
+    exposures.append({
+        "type": "search_engine",
+        "source": "Google",
+        "risk": "low",
+        "description": f"Username '{username}' may appear in search results",
+        "url": f"https://www.google.com/search?q=%22{username}%22",
+        "icon": "search"
+    })
+    
+    # Data broker/people search sites
+    exposures.append({
+        "type": "data_broker",
+        "source": "People Search Sites",
+        "risk": "medium",
+        "description": "Username may be indexed by people search services",
+        "url": "",
+        "icon": "database"
+    })
+    
+    return exposures
+
+
+def generate_email_exposures(email: str, email_username: str, platform_urls: Dict) -> List[Dict[str, Any]]:
+    """
+    Generate potential exposure points for an email address.
+    
+    Args:
+        email: The full email address
+        email_username: Username part of email
+        platform_urls: Generated platform URLs
+    
+    Returns:
+        List of exposure dictionaries
+    """
+    exposures = []
+    
+    # Data breach exposure - HIGH PRIORITY
+    exposures.append({
+        "type": "data_breach",
+        "source": "Have I Been Pwned",
+        "risk": "high",
+        "description": "Check if email appears in known data breaches",
+        "url": f"https://haveibeenpwned.com/account/{email}",
+        "icon": "alert"
+    })
+    
+    # Gravatar/profile picture lookup
+    exposures.append({
+        "type": "profile_image",
+        "source": "Gravatar",
+        "risk": "low",
+        "description": "Profile picture may be linked to this email",
+        "url": f"https://www.gravatar.com/{email}",
+        "icon": "image"
+    })
+    
+    # Social media (using email username)
+    for platform, data in platform_urls.items():
+        exposures.append({
+            "type": "social_media",
+            "source": data.get("name", platform.capitalize()),
+            "risk": "medium",
+            "description": f"Account may be registered with username '{email_username}'",
+            "url": data.get("url", ""),
+            "icon": platform
+        })
+    
+    # Email search
+    exposures.append({
+        "type": "search_engine",
+        "source": "Google",
+        "risk": "medium",
+        "description": f"Email '{email}' may appear in search results or leaked databases",
+        "url": f"https://www.google.com/search?q=%22{email}%22",
+        "icon": "search"
+    })
+    
+    # Pastebin/paste sites
+    exposures.append({
+        "type": "paste_site",
+        "source": "Paste Sites",
+        "risk": "high",
+        "description": "Email may appear in publicly shared data dumps",
+        "url": "",
+        "icon": "file"
+    })
+    
+    return exposures
+
+
+def generate_phone_exposures(phone: str, normalized_phone: str) -> List[Dict[str, Any]]:
+    """
+    Generate potential exposure points for a phone number.
+    
+    Args:
+        phone: Original phone number input
+        normalized_phone: Normalized phone number
+    
+    Returns:
+        List of exposure dictionaries
+    """
+    exposures = []
+    
+    # WhatsApp lookup
+    exposures.append({
+        "type": "messaging",
+        "source": "WhatsApp",
+        "risk": "medium",
+        "description": "Phone may be linked to a WhatsApp account",
+        "url": f"https://wa.me/{normalized_phone.replace('+', '')}",
+        "icon": "whatsapp"
+    })
+    
+    # Viber (popular in Sri Lanka)
+    exposures.append({
+        "type": "messaging",
+        "source": "Viber",
+        "risk": "medium",
+        "description": "Phone may be linked to a Viber account",
+        "url": "",
+        "icon": "viber"
+    })
+    
+    # Telegram
+    exposures.append({
+        "type": "messaging",
+        "source": "Telegram",
+        "risk": "medium",
+        "description": "Phone may be linked to a Telegram account",
+        "url": "",
+        "icon": "telegram"
+    })
+    
+    # Truecaller lookup
+    exposures.append({
+        "type": "caller_id",
+        "source": "Truecaller",
+        "risk": "high",
+        "description": "Name and details may be visible in Truecaller database",
+        "url": f"https://www.truecaller.com/search/lk/{phone.replace('+', '')}",
+        "icon": "phone"
+    })
+    
+    # Search engine
+    exposures.append({
+        "type": "search_engine",
+        "source": "Google",
+        "risk": "medium",
+        "description": f"Phone number may appear in search results or directories",
+        "url": f"https://www.google.com/search?q=%22{phone}%22",
+        "icon": "search"
+    })
+    
+    # Classified ads / directories
+    exposures.append({
+        "type": "directory",
+        "source": "Online Directories",
+        "risk": "medium",
+        "description": "Number may be listed in business directories or classified ads",
+        "url": "",
+        "icon": "directory"
+    })
+    
+    # Social media phone lookup
+    exposures.append({
+        "type": "social_media",
+        "source": "Facebook",
+        "risk": "medium",
+        "description": "Account may be discoverable via phone number",
+        "url": "",
+        "icon": "facebook"
+    })
+    
+    return exposures
+
+
+def generate_name_exposures(name: str, variations: List[str], platform_urls: Dict) -> List[Dict[str, Any]]:
+    """
+    Generate potential exposure points for a name.
+    
+    Args:
+        name: The full name
+        variations: Username variations from name
+        platform_urls: Generated platform URLs
+    
+    Returns:
+        List of exposure dictionaries
+    """
+    exposures = []
+    
+    # Google search
+    exposures.append({
+        "type": "search_engine",
+        "source": "Google",
+        "risk": "medium",
+        "description": f"Search results for '{name}'",
+        "url": f"https://www.google.com/search?q=%22{name.replace(' ', '+')}%22",
+        "icon": "search"
+    })
+    
+    # Social media profiles
+    for platform, data in platform_urls.items():
+        exposures.append({
+            "type": "social_media",
+            "source": data.get("name", platform.capitalize()),
+            "risk": "medium",
+            "description": f"Profile may exist with name-based username",
+            "url": data.get("url", ""),
+            "icon": platform
+        })
+    
+    # LinkedIn (professional)
+    exposures.append({
+        "type": "professional",
+        "source": "LinkedIn",
+        "risk": "medium",
+        "description": "Professional profile may exist",
+        "url": f"https://www.linkedin.com/search/results/all/?keywords={name.replace(' ', '%20')}",
+        "icon": "linkedin"
+    })
+    
+    # News mentions
+    exposures.append({
+        "type": "news",
+        "source": "Google News",
+        "risk": "low",
+        "description": "Name may appear in news articles",
+        "url": f"https://news.google.com/search?q=%22{name.replace(' ', '+')}%22",
+        "icon": "news"
+    })
+    
+    # Academic/research
+    exposures.append({
+        "type": "academic",
+        "source": "Google Scholar",
+        "risk": "low",
+        "description": "Name may appear in academic publications",
+        "url": f"https://scholar.google.com/scholar?q=%22{name.replace(' ', '+')}%22",
+        "icon": "academic"
+    })
+    
+    # Public records
+    exposures.append({
+        "type": "public_records",
+        "source": "Public Records",
+        "risk": "medium",
+        "description": "Name may appear in public government records",
+        "url": "",
+        "icon": "government"
+    })
+    
+    return exposures
+
+
 # =============================================================================
 # TRANSLITERATION ENDPOINT (Phase 2)
 # =============================================================================
@@ -761,8 +1127,8 @@ async def correlate_profiles(request: CorrelationRequest) -> CorrelationResponse
     Example:
         Input: {
             "profiles": [
-                {"platform": "facebook", "username": "john_doe", "name": "John Doe"},
-                {"platform": "twitter", "username": "johndoe", "name": "John Doe"}
+                {"source": "facebook", "username": "john_doe", "name": "John Doe"},
+                {"source": "twitter", "username": "johndoe", "name": "John Doe"}
             ]
         }
         Output: {
@@ -933,7 +1299,7 @@ async def collect_profile_data(request: DataCollectionRequest) -> DataCollection
         DataCollectionResponse: Extracted profile data
     
     Example:
-        Input: {"url": "https://instagram.com/john_doe/", "platform": "instagram"}
+        Input: {"url": "https://instagram.com/john_doe/", "source": "instagram"}
         Output: {"name": "John Doe", "bio": "...", "profile_image": "...", ...}
     """
     try:

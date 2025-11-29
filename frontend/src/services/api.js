@@ -127,13 +127,12 @@ export async function checkHealth() {
  * 
  * @param {Object} params - Analysis parameters
  * @param {string} params.identifier - Identifier to analyze (required)
- * @param {string} params.identifier_type - Type of identifier (username, email, phone, name)
+ * @param {string} [params.identifier_type] - Optional type (auto-detected if not provided)
  * @returns {Promise<Object>} Analysis results
  * 
  * @example
  * const results = await analyze({
- *   identifier: 'john_doe',
- *   identifier_type: 'username'
+ *   identifier: 'john_doe'
  * });
  */
 export async function analyze({ identifier, identifier_type }) {
@@ -142,15 +141,15 @@ export async function analyze({ identifier, identifier_type }) {
     throw new ApiError('Identifier is required', 400);
   }
 
-  if (!identifier_type) {
-    throw new ApiError('Identifier type is required', 400);
-  }
-
-  // Build request body
+  // Build request body - identifier_type is optional (backend auto-detects)
   const body = {
     identifier: identifier.trim(),
-    identifier_type: identifier_type,
   };
+  
+  // Only include identifier_type if explicitly provided
+  if (identifier_type) {
+    body.identifier_type = identifier_type;
+  }
 
   return fetchWithTimeout(`${API_BASE_URL}/analyze`, {
     method: 'POST',

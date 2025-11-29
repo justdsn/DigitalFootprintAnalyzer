@@ -132,7 +132,7 @@ function ResultsPage() {
          * ------------------------------------------------------------------- */}
         <div className="bg-white rounded-2xl shadow-card p-6 mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">{t('results.summary.title')}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 rounded-lg bg-primary-100 flex items-center justify-center">
                 <svg className="w-5 h-5 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -140,8 +140,19 @@ function ResultsPage() {
                 </svg>
               </div>
               <div>
-                <p className="text-sm text-gray-500">{t('results.summary.username')}</p>
-                <p className="font-semibold text-gray-900">@{results.username}</p>
+                <p className="text-sm text-gray-500">Identifier</p>
+                <p className="font-semibold text-gray-900">{results.identifier}</p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500">Detected Type</p>
+                <p className="font-semibold text-gray-900 capitalize">{results.identifier_type}</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -164,6 +175,113 @@ function ResultsPage() {
         <div className="mb-8">
           <RiskIndicator score={results.risk_score} level={results.risk_level} />
         </div>
+
+        {/* -------------------------------------------------------------------
+         * Potential Exposures
+         * ------------------------------------------------------------------- */}
+        {results.potential_exposures && results.potential_exposures.length > 0 && (
+          <div className="mb-8">
+            <ResultCard
+              title="Potential Exposure Points"
+              subtitle="Places where your identifier may be linked or exposed"
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              }
+            >
+              <div className="space-y-3">
+                {results.potential_exposures.map((exposure, index) => (
+                  <div
+                    key={index}
+                    className={`flex items-start space-x-4 p-4 rounded-lg border ${
+                      exposure.risk === 'high' 
+                        ? 'bg-red-50 border-red-200' 
+                        : exposure.risk === 'medium'
+                        ? 'bg-amber-50 border-amber-200'
+                        : 'bg-blue-50 border-blue-200'
+                    }`}
+                  >
+                    {/* Risk Indicator */}
+                    <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                      exposure.risk === 'high'
+                        ? 'bg-red-100'
+                        : exposure.risk === 'medium'
+                        ? 'bg-amber-100'
+                        : 'bg-blue-100'
+                    }`}>
+                      {exposure.risk === 'high' ? (
+                        <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                      ) : exposure.risk === 'medium' ? (
+                        <svg className="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      )}
+                    </div>
+                    
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <h4 className={`font-semibold ${
+                          exposure.risk === 'high'
+                            ? 'text-red-900'
+                            : exposure.risk === 'medium'
+                            ? 'text-amber-900'
+                            : 'text-blue-900'
+                        }`}>
+                          {exposure.source}
+                        </h4>
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${
+                          exposure.risk === 'high'
+                            ? 'bg-red-200 text-red-800'
+                            : exposure.risk === 'medium'
+                            ? 'bg-amber-200 text-amber-800'
+                            : 'bg-blue-200 text-blue-800'
+                        }`}>
+                          {exposure.risk.toUpperCase()} RISK
+                        </span>
+                      </div>
+                      <p className={`text-sm mt-1 ${
+                        exposure.risk === 'high'
+                          ? 'text-red-700'
+                          : exposure.risk === 'medium'
+                          ? 'text-amber-700'
+                          : 'text-blue-700'
+                      }`}>
+                        {exposure.description}
+                      </p>
+                      {exposure.url && (
+                        <a
+                          href={exposure.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`inline-flex items-center space-x-1 text-sm mt-2 hover:underline ${
+                            exposure.risk === 'high'
+                              ? 'text-red-600'
+                              : exposure.risk === 'medium'
+                              ? 'text-amber-600'
+                              : 'text-blue-600'
+                          }`}
+                        >
+                          <span>Check Now</span>
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ResultCard>
+          </div>
+        )}
 
         {/* -------------------------------------------------------------------
          * Two Column Layout
