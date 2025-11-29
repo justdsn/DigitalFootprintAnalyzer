@@ -46,12 +46,25 @@ Digital Footprint Analyzer is designed to help Sri Lankan citizens:
 - **English** - Full English language support
 - **Sinhala (සිංහල)** - Complete Sinhala translation for all UI text
 
-### 🔤 Sinhala Transliteration Engine (Phase 2)
+### 🔤 Sinhala Transliteration Engine (Phase 2 - Hybrid Approach)
+- **Three-Tier Hybrid Transliteration** - Advanced multi-tier approach for accurate transliteration:
+  - **Tier 1 - Dictionary Lookup**: Custom dictionaries for known Sri Lankan names/locations
+  - **Tier 2 - Indic NLP Library**: Linguistically-informed transliteration for unknown words
+  - **Tier 3 - Grapheme Mapping**: Character-by-character fallback for edge cases
 - **Sinhala to English Conversion** - Convert Sinhala Unicode text (දුෂාන්) to romanized English (dushan)
 - **Multiple Spelling Variants** - Generate alternative spellings (dushan, dushaan, dusan)
 - **Name Dictionary** - 50+ common Sri Lankan first names and surnames with pre-defined transliterations
 - **Location Dictionary** - 50+ Sri Lankan cities and towns with transliteration variants
 - **Automatic Detection** - Automatically detect Sinhala Unicode text (U+0D80-U+0DFF range)
+- **Graceful Degradation** - Works reliably even when optional dependencies unavailable
+
+#### Benefits of Hybrid Approach
+| Benefit | Description |
+|---------|-------------|
+| **High Accuracy** | Dictionary lookup ensures accurate results for common names |
+| **Linguistic Correctness** | Indic NLP provides proper handling of complex phonemes |
+| **Robustness** | Grapheme fallback handles edge cases and unknown characters |
+| **Graceful Degradation** | Engine works even without optional Indic NLP dependency |
 
 ### 🔗 Cross-Platform Correlation (Phase 2)
 - **Profile Comparison** - Compare PII across Facebook, Instagram, X, LinkedIn profiles
@@ -71,6 +84,7 @@ Digital Footprint Analyzer is designed to help Sri Lankan citizens:
 | **Pydantic** | Data validation and settings management |
 | **Uvicorn** | ASGI server |
 | **rapidfuzz** | Fast fuzzy string matching for correlation |
+| **indic-nlp-library** | Indic language NLP for hybrid Sinhala transliteration |
 
 ### Frontend
 | Technology | Purpose |

@@ -1,23 +1,41 @@
 # =============================================================================
-# SINHALA TRANSLITERATION ENGINE
+# SINHALA TRANSLITERATION ENGINE (HYBRID APPROACH)
 # =============================================================================
 # Main transliteration service for converting Sinhala text to romanized English.
+# Implements a three-tier hybrid approach combining:
+#   1. Custom dictionaries for known names/locations
+#   2. Indic NLP Library for unknown Sinhala words
+#   3. Grapheme mapping as fallback
 # Supports names, locations, and general text with spelling variant generation.
 # =============================================================================
 
 """
-Sinhala Transliteration Engine
+Sinhala Transliteration Engine (Hybrid Approach)
 
 This module provides comprehensive Sinhala to English transliteration
-capabilities with support for:
+capabilities using a three-tier hybrid approach:
 
-- Automatic Sinhala script detection
-- Character-by-character transliteration
-- Dictionary-based name and location lookup
-- Spelling variant generation for fuzzy matching
+Tier 1 - Dictionary Lookup:
+    - Checks custom dictionaries for known Sri Lankan names and locations
+    - Returns pre-defined transliteration variants for accurate results
+    - Covers 50+ common first names, surnames, and locations
 
-The transliteration follows common Sri Lankan romanization conventions
-and generates multiple variants to account for different spelling practices.
+Tier 2 - Indic NLP Library:
+    - Uses UnicodeIndicTransliterator for unknown Sinhala words
+    - Provides linguistically-informed transliteration using established
+      Indic NLP algorithms
+    - Falls back gracefully if library is unavailable
+
+Tier 3 - Grapheme Mapping:
+    - Character-by-character transliteration as final fallback
+    - Uses comprehensive Sinhala Unicode to English mappings
+    - Handles edge cases and mixed-script text
+
+Benefits of Hybrid Approach:
+    - High accuracy for common names (dictionary lookup)
+    - Linguistic correctness for unknown words (Indic NLP)
+    - Robust fallback for edge cases (grapheme mapping)
+    - Graceful degradation when dependencies unavailable
 
 Example Usage:
     transliterator = SinhalaTransliterator()
@@ -25,7 +43,7 @@ Example Usage:
     # Check if text is Sinhala
     is_sinhala = transliterator.is_sinhala("සුනිල්")  # True
     
-    # Transliterate text
+    # Transliterate text (uses hybrid approach automatically)
     results = transliterator.transliterate("සුනිල් පෙරේරා")
     # Returns: ['sunil perera', 'suneel perera', ...]
 """
@@ -41,6 +59,7 @@ from .grapheme_map import (
     VOWEL_SIGNS,
     SPECIAL_CHARS,
     VARIANT_RULES,
+    VARIANT_RULES_EXTENDED,
     SINHALA_UNICODE_START,
     SINHALA_UNICODE_END,
     is_sinhala_char,
@@ -49,6 +68,27 @@ from .grapheme_map import (
 # Import dictionaries
 from .name_dictionary import NAME_DICTIONARY, get_name_variants
 from .location_dictionary import LOCATION_DICTIONARY, get_location_variants
+
+# =============================================================================
+# INDIC NLP LIBRARY INTEGRATION
+# =============================================================================
+# Attempt to import Indic NLP Library for enhanced transliteration.
+# The library provides UnicodeIndicTransliterator for Sinhala→Latin conversion.
+# If unavailable, the engine falls back to grapheme-based transliteration.
+# =============================================================================
+
+# Flag to track Indic NLP Library availability for graceful degradation
+INDIC_NLP_AVAILABLE = False
+
+try:
+    # Import UnicodeIndicTransliterator from Indic NLP Library
+    # This provides linguistically-informed transliteration for Indic scripts
+    from indicnlp.transliterate.unicode_transliterate import UnicodeIndicTransliterator
+    INDIC_NLP_AVAILABLE = True
+except ImportError:
+    # Indic NLP Library not installed - will use grapheme fallback
+    # This ensures the engine works even without the optional dependency
+    UnicodeIndicTransliterator = None
 
 
 # =============================================================================
@@ -90,13 +130,24 @@ class SinhalaTransliterator:
         """
         Initialize the Sinhala Transliterator with dictionaries and rules.
         
-        Loads the name and location dictionaries for lookup-based
-        transliteration of common Sri Lankan names and places.
+        Sets up the hybrid transliteration engine with:
+        - Name and location dictionaries for Tier 1 lookup
+        - Indic NLP Library integration for Tier 2 (if available)
+        - Extended variant rules for comprehensive spelling variant generation
+        
+        The engine automatically detects Indic NLP Library availability
+        and falls back to grapheme mapping when necessary.
         """
-        # Load dictionaries
+        # Load dictionaries for Tier 1 - Dictionary lookup
         self.name_dict = NAME_DICTIONARY
         self.location_dict = LOCATION_DICTIONARY
-        self.variant_rules = VARIANT_RULES
+        
+        # Use extended variant rules for comprehensive variant generation
+        # Supports both dictionary format (single value) and list format
+        self.variant_rules = VARIANT_RULES_EXTENDED
+        
+        # Store availability flag for Tier 2 - Indic NLP
+        self.indic_nlp_available = INDIC_NLP_AVAILABLE
         
         # Build combined lookup for fast dictionary matching
         self._build_lookup_cache()
@@ -223,26 +274,63 @@ class SinhalaTransliterator:
     
     def _transliterate_word(self, word: str) -> List[str]:
         """
-        Transliterate a single Sinhala word.
+        Transliterate a single Sinhala word using three-tier hybrid approach.
         
-        First checks the dictionary for known names/locations,
-        then falls back to character-by-character transliteration.
+        This method implements the hybrid transliteration strategy:
+        
+        Tier 1 - Dictionary Lookup:
+            First checks custom dictionaries for known Sri Lankan names
+            and locations. Returns pre-defined variants if found.
+        
+        Tier 2 - Indic NLP Library:
+            If dictionary lookup fails and Indic NLP Library is available,
+            uses UnicodeIndicTransliterator for linguistically-informed
+            transliteration of unknown Sinhala words.
+        
+        Tier 3 - Grapheme Mapping:
+            Falls back to character-by-character transliteration using
+            the comprehensive Sinhala grapheme mappings.
+        
+        All approaches generate spelling variants for fuzzy matching support.
         
         Args:
-            word: Single Sinhala word
+            word: Single Sinhala word to transliterate
             
         Returns:
             List[str]: List of transliteration variants for this word
         """
-        # First, try dictionary lookup
+        # ---------------------------------------------------------------------
+        # TIER 1: Dictionary lookup for known names/locations
+        # Priority given to custom dictionaries for accurate Sri Lankan
+        # name/location transliteration with pre-defined variants
+        # ---------------------------------------------------------------------
         dict_variants = self._dictionary_lookup(word)
         if dict_variants:
             return dict_variants
         
-        # Fall back to character-based transliteration
+        # ---------------------------------------------------------------------
+        # TIER 2: Indic NLP Library for unknown Sinhala words
+        # Uses linguistically-informed transliteration algorithms when
+        # the library is available, providing better results than
+        # simple character mapping for complex Sinhala phonemes
+        # ---------------------------------------------------------------------
+        indic_transliteration = self._indic_nlp_transliterate(word)
+        if indic_transliteration:
+            # Generate variants from Indic NLP result for fuzzy matching
+            variants = self.generate_variants(indic_transliteration)
+            if indic_transliteration not in variants:
+                variants.insert(0, indic_transliteration)
+            return variants
+        
+        # ---------------------------------------------------------------------
+        # TIER 3: Grapheme mapping as fallback
+        # Character-by-character transliteration using comprehensive
+        # Sinhala Unicode mappings - ensures robustness when other
+        # methods are unavailable or fail
+        # ---------------------------------------------------------------------
         base_transliteration = self.transliterate_word(word)
         
-        # Generate variants from base transliteration
+        # Generate variants from base transliteration for fuzzy matching
         variants = self.generate_variants(base_transliteration)
         
         # Always include the base transliteration
@@ -250,6 +338,35 @@ class SinhalaTransliterator:
             variants.insert(0, base_transliteration)
         
         return variants
+    
+    def _indic_nlp_transliterate(self, word: str) -> Optional[str]:
+        """
+        Transliterate a word using Indic NLP Library.
+        
+        Uses UnicodeIndicTransliterator to convert Sinhala text to Latin
+        script using linguistically-informed algorithms.
+        
+        Args:
+            word: Sinhala word to transliterate
+            
+        Returns:
+            str or None: Transliterated text, or None if unavailable/failed
+        """
+        # Check if Indic NLP Library is available
+        if not INDIC_NLP_AVAILABLE or UnicodeIndicTransliterator is None:
+            return None
+        
+        try:
+            # Use Indic NLP transliterator: Sinhala (si) to Latin (la)
+            # The library handles complex phoneme mappings and conjuncts
+            result = UnicodeIndicTransliterator.transliterate(word, 'si', 'la')
+            
+            # Return lowercase for consistent matching
+            return result.lower() if result else None
+        except Exception:
+            # Graceful degradation if transliteration fails
+            # Fall through to grapheme mapping in calling method
+            return None
     
     def _dictionary_lookup(self, word: str) -> Optional[List[str]]:
         """
@@ -409,8 +526,12 @@ class SinhalaTransliterator:
         """
         Generate spelling variants from a base romanization.
         
-        Applies variant rules to generate alternative spellings
-        that account for different romanization conventions.
+        Uses the extended variant rules (VARIANT_RULES_EXTENDED) to generate
+        alternative spellings that account for different romanization
+        conventions common in Sri Lankan names and places.
+        
+        The method applies pattern replacements iteratively to generate
+        comprehensive spelling variants for fuzzy matching support.
         
         Args:
             base: Base romanized text
@@ -427,17 +548,24 @@ class SinhalaTransliterator:
         
         variants = {base}
         
-        # Apply each variant rule
+        # Apply each variant rule from extended rules
+        # Extended rules map patterns to lists of possible replacements
         for pattern, replacements in self.variant_rules.items():
             new_variants = set()
             for variant in variants:
                 if pattern in variant:
-                    for replacement in replacements:
-                        new_variant = variant.replace(pattern, replacement, 1)
+                    # Handle both dict format (single value) and list format
+                    if isinstance(replacements, list):
+                        for replacement in replacements:
+                            new_variant = variant.replace(pattern, replacement, 1)
+                            new_variants.add(new_variant)
+                    else:
+                        # Dictionary format: single replacement value
+                        new_variant = variant.replace(pattern, replacements, 1)
                         new_variants.add(new_variant)
             variants.update(new_variants)
         
-        # Limit number of variants
+        # Limit number of variants to prevent explosion
         result = list(variants)
         result.sort(key=len)
         return result[:MAX_VARIANTS]

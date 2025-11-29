@@ -42,6 +42,7 @@ from .grapheme_map import (
     CONSONANTS,
     VOWEL_SIGNS,
     VARIANT_RULES,
+    VARIANT_RULES_EXTENDED,
     SINHALA_UNICODE_START,
     SINHALA_UNICODE_END,
 )
@@ -83,6 +84,7 @@ __all__ = [
     "CONSONANTS",
     "VOWEL_SIGNS",
     "VARIANT_RULES",
+    "VARIANT_RULES_EXTENDED",
     
     # Constants
     "SINHALA_UNICODE_START",

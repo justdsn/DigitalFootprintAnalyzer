@@ -235,14 +235,35 @@ SPECIAL_CHARS = {
 
 
 # =============================================================================
-# VARIANT RULES
+# VARIANT RULES (Dictionary Format)
 # =============================================================================
 # Rules for generating common spelling alternatives.
 # These account for different romanization conventions and common variations
 # in Sri Lankan English spellings.
+#
+# Format: source pattern -> primary simplified variant
+# This dictionary format enables efficient lookup for common romanization
+# patterns used in Sri Lankan names and locations.
 # =============================================================================
 
 VARIANT_RULES = {
+    # Vowel length variations (long vowels → short vowels)
+    # These simplifications handle common spelling variations in Sri Lankan names
+    'aa': 'a',      # e.g., 'kamaal' → 'kamal'
+    'ee': 'i',      # e.g., 'suneel' → 'sunil'
+    'oo': 'u',      # e.g., 'roohaan' → 'ruhan'
+    
+    # Aspirated consonant simplifications
+    # Common in Sri Lankan romanization where aspiration is often dropped
+    'th': 't',      # e.g., 'thilak' → 'tilak'
+    'dh': 'd',      # e.g., 'dharma' → 'darma'
+    'sh': 's',      # e.g., 'shantha' → 'santa'
+    'ch': 'c',      # e.g., 'chandra' → 'candra'
+}
+
+# Extended variant rules for comprehensive variant generation
+# Maps source patterns to all possible alternatives
+VARIANT_RULES_EXTENDED = {
     # Vowel length variations (aa ↔ a)
     'aa': ['a', 'ah'],
     'ee': ['e', 'i', 'ey'],
