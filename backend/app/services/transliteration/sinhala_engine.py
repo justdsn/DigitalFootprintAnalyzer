@@ -143,7 +143,7 @@ class SinhalaTransliterator:
         self.location_dict = LOCATION_DICTIONARY
         
         # Use extended variant rules for comprehensive variant generation
-        # Supports both dictionary format (single value) and list format
+        # Each pattern maps to a list of possible replacements
         self.variant_rules = VARIANT_RULES_EXTENDED
         
         # Store availability flag for Tier 2 - Indic NLP
@@ -554,14 +554,9 @@ class SinhalaTransliterator:
             new_variants = set()
             for variant in variants:
                 if pattern in variant:
-                    # Handle both dict format (single value) and list format
-                    if isinstance(replacements, list):
-                        for replacement in replacements:
-                            new_variant = variant.replace(pattern, replacement, 1)
-                            new_variants.add(new_variant)
-                    else:
-                        # Dictionary format: single replacement value
-                        new_variant = variant.replace(pattern, replacements, 1)
+                    # Iterate through all replacement options for comprehensive variants
+                    for replacement in replacements:
+                        new_variant = variant.replace(pattern, replacement, 1)
                         new_variants.add(new_variant)
             variants.update(new_variants)
         
