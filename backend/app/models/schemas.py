@@ -663,3 +663,440 @@ class CorrelationResponse(BaseModel):
         default_factory=list,
         description="Recommended actions based on analysis"
     )
+
+
+# =============================================================================
+# PROFILE URL GENERATION MODELS (Phase 3)
+# =============================================================================
+
+class ProfileURLRequest(BaseModel):
+    """
+    Request model for profile URL generation endpoint.
+    
+    Attributes:
+        username: Username to generate URLs for
+        include_variations: Whether to include username variations
+    
+    Example:
+        {
+            "username": "john_doe",
+            "include_variations": true
+        }
+    """
+    username: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Username to generate profile URLs for",
+        examples=["john_doe", "johndoe123"]
+    )
+    include_variations: bool = Field(
+        default=False,
+        description="Whether to include username variations in response"
+    )
+    
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        """Validate and clean the username."""
+        if not v or not v.strip():
+            raise ValueError("Username cannot be empty")
+        return v.strip().lstrip('@')
+
+
+class ProfileURLResponse(BaseModel):
+    """
+    Response model for profile URL generation endpoint.
+    
+    Attributes:
+        username: The username used for URL generation
+        urls: Dict of platform URLs
+        variations: Optional list of username variations with their URLs
+    
+    Example:
+        {
+            "username": "john_doe",
+            "urls": {
+                "facebook": {"name": "Facebook", "url": "..."},
+                ...
+            },
+            "variations": [...]
+        }
+    """
+    username: str = Field(
+        ...,
+        description="The username used for URL generation"
+    )
+    urls: Dict[str, Dict[str, str]] = Field(
+        ...,
+        description="Platform URLs for the username"
+    )
+    variations: Optional[List[Dict[str, Any]]] = Field(
+        default=None,
+        description="Username variations with their URLs"
+    )
+
+
+# =============================================================================
+# PROFILE CHECK MODELS (Phase 3)
+# =============================================================================
+
+class ProfileCheckRequest(BaseModel):
+    """
+    Request model for profile existence check endpoint.
+    
+    Attributes:
+        username: Username to check
+        platforms: Optional list of platforms to check (None = all)
+    
+    Example:
+        {
+            "username": "john_doe",
+            "platforms": ["instagram", "facebook"]
+        }
+    """
+    username: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Username to check for existence",
+        examples=["john_doe"]
+    )
+    platforms: Optional[List[str]] = Field(
+        default=None,
+        description="List of platforms to check. If None, checks all supported platforms.",
+        examples=[["facebook", "instagram", "linkedin", "x"]]
+    )
+    
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        """Validate and clean the username."""
+        if not v or not v.strip():
+            raise ValueError("Username cannot be empty")
+        return v.strip().lstrip('@')
+
+
+class ProfileCheckResponse(BaseModel):
+    """
+    Response model for profile existence check endpoint.
+    
+    Attributes:
+        username: The username that was checked
+        results: Dict of check results per platform
+        summary: Summary counts by status
+    
+    Example:
+        {
+            "username": "john_doe",
+            "results": {
+                "facebook": {"status": "exists", "url": "...", ...},
+                ...
+            },
+            "summary": {"exists": 2, "not_found": 1, ...}
+        }
+    """
+    username: str = Field(
+        ...,
+        description="The username that was checked"
+    )
+    results: Dict[str, Dict[str, Any]] = Field(
+        ...,
+        description="Check results for each platform"
+    )
+    summary: Dict[str, int] = Field(
+        ...,
+        description="Summary counts by status (exists, not_found, private, error)"
+    )
+
+
+# =============================================================================
+# DATA COLLECTION MODELS (Phase 3)
+# =============================================================================
+
+class DataCollectionRequest(BaseModel):
+    """
+    Request model for profile data collection endpoint.
+    
+    Attributes:
+        url: Profile URL to collect data from
+        platform: Platform identifier
+    
+    Example:
+        {
+            "url": "https://www.instagram.com/john_doe/",
+            "platform": "instagram"
+        }
+    """
+    url: str = Field(
+        ...,
+        min_length=10,
+        description="Profile URL to collect data from",
+        examples=["https://www.instagram.com/john_doe/"]
+    )
+    platform: str = Field(
+        ...,
+        min_length=1,
+        description="Platform identifier (facebook, instagram, linkedin, x)",
+        examples=["instagram", "facebook"]
+    )
+
+
+class DataCollectionResponse(BaseModel):
+    """
+    Response model for profile data collection endpoint.
+    
+    Attributes:
+        url: The URL that was processed
+        platform: Platform identifier
+        name: Extracted display name
+        bio: Extracted bio/description
+        profile_image: Profile picture URL
+        location: Extracted location
+        success: Whether data collection was successful
+        error: Error message if any
+    
+    Example:
+        {
+            "url": "https://www.instagram.com/john_doe/",
+            "platform": "instagram",
+            "name": "John Doe",
+            "bio": "Software Developer",
+            "profile_image": "https://...",
+            "location": null,
+            "success": true,
+            "error": null
+        }
+    """
+    url: str = Field(
+        ...,
+        description="The URL that was processed"
+    )
+    platform: str = Field(
+        ...,
+        description="Platform identifier"
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description="Extracted display name"
+    )
+    bio: Optional[str] = Field(
+        default=None,
+        description="Extracted bio/description"
+    )
+    profile_image: Optional[str] = Field(
+        default=None,
+        description="Profile picture URL"
+    )
+    location: Optional[str] = Field(
+        default=None,
+        description="Extracted location"
+    )
+    success: bool = Field(
+        ...,
+        description="Whether data collection was successful"
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Error message if any"
+    )
+
+
+# =============================================================================
+# PHONE LOOKUP MODELS (Phase 3)
+# =============================================================================
+
+class PhoneLookupRequest(BaseModel):
+    """
+    Request model for phone number lookup endpoint.
+    
+    Attributes:
+        phone: Sri Lankan phone number to lookup
+    
+    Example:
+        {
+            "phone": "0771234567"
+        }
+    """
+    phone: str = Field(
+        ...,
+        min_length=9,
+        max_length=20,
+        description="Sri Lankan phone number to lookup",
+        examples=["0771234567", "+94771234567", "077-123-4567"]
+    )
+    
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        """Validate that phone is not empty."""
+        if not v or not v.strip():
+            raise ValueError("Phone number cannot be empty")
+        return v.strip()
+
+
+class PhoneLookupResponse(BaseModel):
+    """
+    Response model for phone number lookup endpoint.
+    
+    Attributes:
+        original: Original phone input
+        valid: Whether the number is valid
+        type: "mobile" or "landline"
+        carrier: Carrier name (mobile) or region (landline)
+        e164_format: E.164 formatted number
+        local_format: Local display format
+        international_format: International display format
+        error: Error message if invalid
+    
+    Example:
+        {
+            "original": "0771234567",
+            "valid": true,
+            "type": "mobile",
+            "carrier": "Dialog",
+            "e164_format": "+94771234567",
+            "local_format": "077-123-4567",
+            "international_format": "+94 77 123 4567",
+            "error": null
+        }
+    """
+    original: str = Field(
+        ...,
+        description="Original phone input"
+    )
+    valid: bool = Field(
+        ...,
+        description="Whether the number is valid"
+    )
+    type: Optional[str] = Field(
+        default=None,
+        description="Phone type: mobile or landline"
+    )
+    carrier: Optional[str] = Field(
+        default=None,
+        description="Carrier name (mobile) or region (landline)"
+    )
+    e164_format: Optional[str] = Field(
+        default=None,
+        description="E.164 formatted number (+94XXXXXXXXX)"
+    )
+    local_format: Optional[str] = Field(
+        default=None,
+        description="Local display format (0XX-XXX-XXXX)"
+    )
+    international_format: Optional[str] = Field(
+        default=None,
+        description="International display format (+94 XX XXX XXXX)"
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Error message if invalid"
+    )
+
+
+# =============================================================================
+# FULL SCAN MODELS (Phase 3)
+# =============================================================================
+
+class FullScanRequest(BaseModel):
+    """
+    Request model for full scan endpoint.
+    
+    Performs comprehensive analysis including profile URLs,
+    existence checks, phone lookup, and PII analysis.
+    
+    Attributes:
+        username: Username to scan
+        phone: Optional phone number to analyze
+        email: Optional email to analyze
+        name: Optional name to analyze
+    
+    Example:
+        {
+            "username": "john_doe",
+            "phone": "0771234567",
+            "email": "john@example.com",
+            "name": "John Perera"
+        }
+    """
+    username: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Username to scan",
+        examples=["john_doe"]
+    )
+    phone: Optional[str] = Field(
+        default=None,
+        description="Optional phone number to analyze"
+    )
+    email: Optional[str] = Field(
+        default=None,
+        description="Optional email to analyze"
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description="Optional name to analyze"
+    )
+    
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        """Validate and clean the username."""
+        if not v or not v.strip():
+            raise ValueError("Username cannot be empty")
+        return v.strip().lstrip('@')
+
+
+class FullScanResponse(BaseModel):
+    """
+    Response model for full scan endpoint.
+    
+    Contains comprehensive analysis results including profile URLs,
+    existence status, phone analysis, PII analysis, and recommendations.
+    
+    Attributes:
+        profile_urls: Generated profile URLs
+        profile_existence: Profile existence check results
+        phone_analysis: Phone number analysis (if provided)
+        pii_analysis: PII analysis results (if email/name provided)
+        risk_score: Overall risk score (0-100)
+        recommendations: Security and privacy recommendations
+    
+    Example:
+        {
+            "profile_urls": {...},
+            "profile_existence": {...},
+            "phone_analysis": {...},
+            "pii_analysis": {...},
+            "risk_score": 45,
+            "recommendations": [...]
+        }
+    """
+    profile_urls: Dict[str, Any] = Field(
+        ...,
+        description="Generated profile URLs for all platforms"
+    )
+    profile_existence: Dict[str, Any] = Field(
+        ...,
+        description="Profile existence check results"
+    )
+    phone_analysis: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Phone number analysis results"
+    )
+    pii_analysis: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="PII analysis from email/name"
+    )
+    risk_score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Overall risk score (0-100)"
+    )
+    recommendations: List[str] = Field(
+        default_factory=list,
+        description="Security and privacy recommendations"
+    )
