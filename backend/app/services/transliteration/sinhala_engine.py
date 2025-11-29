@@ -138,24 +138,22 @@ class SinhalaTransliterator:
         # Store availability flag for Tier 2 - Indic NLP
         self.indic_nlp_available = INDIC_NLP_AVAILABLE
         
-        # Build combined lookup for fast dictionary matching
+        # Build combined dictionary for fast lookups
         self._build_lookup_cache()
-        
-        # Build combined dictionary for _transliterate_word
-        self.all_dictionaries = {}
-        self.all_dictionaries.update(self.name_dict)
-        self.all_dictionaries.update(self.location_dict)
     
     def _build_lookup_cache(self) -> None:
         """
         Build a cache for fast dictionary lookups.
         
         Combines name and location dictionaries into a single lookup
-        structure for efficient transliteration.
+        structure for efficient transliteration. This is used by both
+        _transliterate_word and lookup_cache for contains_* methods.
         """
-        self.lookup_cache = {}
-        self.lookup_cache.update(self.name_dict)
-        self.lookup_cache.update(self.location_dict)
+        self.all_dictionaries = {}
+        self.all_dictionaries.update(self.name_dict)
+        self.all_dictionaries.update(self.location_dict)
+        # Alias for backward compatibility with contains_* methods
+        self.lookup_cache = self.all_dictionaries
     
     # =========================================================================
     # SINHALA DETECTION
@@ -314,10 +312,12 @@ class SinhalaTransliterator:
     
     def _indic_nlp_transliterate(self, word: str) -> Optional[str]:
         """
-        Transliterate a word using Indic NLP Library.
+        Attempt transliteration using Indic NLP Library.
         
-        Uses UnicodeIndicTransliterator to convert Sinhala text to Latin
-        script using linguistically-informed algorithms.
+        Note: The Indic NLP Library primarily supports transliteration between
+        Indic scripts (e.g., Sinhala to Hindi, Tamil). Latin/English output
+        may not be available for all scripts. Returns None if transliteration
+        doesn't produce a different result.
         
         Args:
             word: Sinhala word to transliterate
@@ -330,8 +330,8 @@ class SinhalaTransliterator:
             return None
         
         try:
-            # Use Indic NLP transliterator: Sinhala (si) to English (en)
-            # The library handles complex phoneme mappings and conjuncts
+            # Attempt transliteration from Sinhala (si) to target script
+            # Note: Latin output may not be supported - returns None if no change
             result = UnicodeIndicTransliterator.transliterate(word, 'si', 'en')
             
             # Check if transliteration produced a different result (not just original text)
