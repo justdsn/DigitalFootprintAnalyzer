@@ -766,9 +766,10 @@ async def scrape_all_platforms(username: str) -> Dict[str, Dict]:
     """
     results = {}
     
-    for platform, scraper_class in PLATFORM_SCRAPERS.items():
-        scraper = scraper_class()
-        
+    # Pre-instantiate scrapers for reuse
+    scrapers = {platform: scraper_class() for platform, scraper_class in PLATFORM_SCRAPERS.items()}
+    
+    for platform, scraper in scrapers.items():
         # First check if profile exists
         exists_result = await scraper.check_exists(username)
         

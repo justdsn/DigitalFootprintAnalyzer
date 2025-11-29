@@ -58,6 +58,7 @@ from app.models.schemas import (
     FullScanRequest,
     FullScanResponse,
     # Phase 3 Enhancement schemas
+    ExposureScanRequest,
     ExposedPIIItem,
     PlatformExposure,
     ExposureScanResponse,
@@ -1615,7 +1616,7 @@ def _generate_full_scan_recommendations(
     - Actionable recommendations
     """
 )
-async def exposure_scan(request: FullScanRequest) -> ExposureScanResponse:
+async def exposure_scan(request: ExposureScanRequest) -> ExposureScanResponse:
     """
     Perform comprehensive PII exposure scan.
     
@@ -1623,7 +1624,7 @@ async def exposure_scan(request: FullScanRequest) -> ExposureScanResponse:
     platforms and shows exactly what personal information is publicly exposed.
     
     Args:
-        request: FullScanRequest with username and optional phone/email/name
+        request: ExposureScanRequest with username and optional phone/email/name
     
     Returns:
         ExposureScanResponse: Complete exposure analysis with clear PII listing

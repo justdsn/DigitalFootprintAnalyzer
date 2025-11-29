@@ -1058,6 +1058,55 @@ class FullScanRequest(BaseModel):
         return v.strip().lstrip('@')
 
 
+class ExposureScanRequest(BaseModel):
+    """
+    Request model for PII exposure scan endpoint.
+    
+    Performs comprehensive PII exposure analysis across social media platforms.
+    
+    Attributes:
+        username: Username to scan across platforms
+        phone: Optional phone number to match against exposed PII
+        email: Optional email to match against exposed PII
+        name: Optional name to match against exposed PII
+    
+    Example:
+        {
+            "username": "johnperera",
+            "phone": "0771234567",
+            "email": "john@gmail.com",
+            "name": "John Perera"
+        }
+    """
+    username: str = Field(
+        ...,
+        min_length=1,
+        max_length=100,
+        description="Username to scan across platforms",
+        examples=["johnperera"]
+    )
+    phone: Optional[str] = Field(
+        default=None,
+        description="Optional phone number to match against exposed PII"
+    )
+    email: Optional[str] = Field(
+        default=None,
+        description="Optional email to match against exposed PII"
+    )
+    name: Optional[str] = Field(
+        default=None,
+        description="Optional name to match against exposed PII"
+    )
+    
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, v: str) -> str:
+        """Validate and clean the username."""
+        if not v or not v.strip():
+            raise ValueError("Username cannot be empty")
+        return v.strip().lstrip('@')
+
+
 class FullScanResponse(BaseModel):
     """
     Response model for full scan endpoint.
