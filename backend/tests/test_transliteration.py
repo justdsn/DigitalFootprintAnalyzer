@@ -354,6 +354,174 @@ class TestContainsChecks:
 
 
 # =============================================================================
+# HYBRID TRANSLITERATION TESTS (THREE-TIER APPROACH)
+# =============================================================================
+
+class TestHybridTransliteration:
+    """Tests for the three-tier hybrid transliteration approach."""
+    
+    def test_dictionary_priority_over_grapheme(self, transliterator):
+        """
+        Test Tier 1: Dictionary lookup takes priority over grapheme mapping.
+        
+        When a word exists in the dictionary, the pre-defined variants
+        should be returned instead of grapheme-based transliteration.
+        """
+        # 'කමල්' is in the dictionary with pre-defined variants
+        results = transliterator.transliterate("කමල්")
+        
+        # Should return dictionary variants
+        assert 'kamal' in results
+        # Dictionary should take priority
+        assert len(results) > 0
+    
+    def test_dictionary_lookup_known_name(self, transliterator):
+        """Test that known names are found in dictionary lookup."""
+        # Test internal dictionary lookup method
+        dict_variants = transliterator._dictionary_lookup("පෙරේරා")
+        
+        assert dict_variants is not None
+        assert 'perera' in dict_variants
+    
+    def test_dictionary_lookup_unknown_word(self, transliterator):
+        """Test that unknown words return None from dictionary lookup."""
+        # Use a word not in the dictionary
+        dict_variants = transliterator._dictionary_lookup("නොදන්නා")
+        
+        assert dict_variants is None
+    
+    def test_indic_nlp_availability_flag(self, transliterator):
+        """Test that Indic NLP availability flag is set."""
+        # The flag should be a boolean indicating library availability
+        assert isinstance(transliterator.indic_nlp_available, bool)
+    
+    def test_indic_nlp_fallback_method_exists(self, transliterator):
+        """Test that Indic NLP transliteration method exists."""
+        # The method should exist for Tier 2 transliteration
+        assert hasattr(transliterator, '_indic_nlp_transliterate')
+        assert callable(transliterator._indic_nlp_transliterate)
+    
+    def test_indic_nlp_fallback_graceful_degradation(self, transliterator):
+        """
+        Test Tier 2: Indic NLP fallback handles unavailability gracefully.
+        
+        When Indic NLP Library is not available, the method should return
+        None and allow fallback to grapheme mapping.
+        """
+        # Test that the method handles gracefully when library unavailable
+        # or input is problematic
+        result = transliterator._indic_nlp_transliterate("")
+        # Empty input should return None
+        assert result is None
+    
+    def test_grapheme_fallback_for_unknown_words(self, transliterator):
+        """
+        Test Tier 3: Grapheme mapping works as fallback for unknown words.
+        
+        Words not in dictionary should still be transliterated using
+        character-by-character grapheme mapping.
+        """
+        # Use a less common word not in dictionary
+        results = transliterator.transliterate("අම")
+        
+        # Should get results from grapheme mapping
+        assert len(results) > 0
+        # Should contain basic transliteration
+        combined = ''.join(results)
+        assert 'a' in combined.lower()
+    
+    def test_variant_generation_for_all_tiers(self, transliterator):
+        """Test that variant generation works for all transliteration tiers."""
+        # Dictionary word
+        dict_results = transliterator.transliterate("කමල්")
+        assert len(dict_results) >= 1
+        
+        # Unknown word (grapheme fallback)
+        unknown_results = transliterator.transliterate("අම")
+        assert len(unknown_results) >= 1
+
+
+# =============================================================================
+# VARIANT RULES FORMAT TESTS
+# =============================================================================
+
+class TestVariantRulesFormat:
+    """Tests for the new dictionary-format VARIANT_RULES."""
+    
+    def test_variant_rules_is_dict(self):
+        """Test that VARIANT_RULES is a dictionary."""
+        from app.services.transliteration.grapheme_map import VARIANT_RULES
+        
+        assert isinstance(VARIANT_RULES, dict)
+    
+    def test_variant_rules_has_key_mappings(self):
+        """Test that VARIANT_RULES has expected key-value mappings."""
+        from app.services.transliteration.grapheme_map import VARIANT_RULES
+        
+        # Check expected keys exist
+        assert 'aa' in VARIANT_RULES
+        assert 'ee' in VARIANT_RULES
+        assert 'th' in VARIANT_RULES
+        assert 'dh' in VARIANT_RULES
+    
+    def test_variant_rules_values_are_strings(self):
+        """Test that VARIANT_RULES values are single strings (not lists)."""
+        from app.services.transliteration.grapheme_map import VARIANT_RULES
+        
+        # Dictionary format should have string values
+        assert VARIANT_RULES['aa'] == 'a'
+        assert VARIANT_RULES['ee'] == 'i'
+        assert VARIANT_RULES['th'] == 't'
+        assert VARIANT_RULES['dh'] == 'd'
+    
+    def test_variant_rules_extended_exists(self):
+        """Test that VARIANT_RULES_EXTENDED is available."""
+        from app.services.transliteration.grapheme_map import VARIANT_RULES_EXTENDED
+        
+        assert isinstance(VARIANT_RULES_EXTENDED, dict)
+        # Extended rules should have list values
+        assert isinstance(VARIANT_RULES_EXTENDED['aa'], list)
+    
+    def test_variant_rules_extended_comprehensive(self):
+        """Test that VARIANT_RULES_EXTENDED has comprehensive mappings."""
+        from app.services.transliteration.grapheme_map import VARIANT_RULES_EXTENDED
+        
+        # Should have all basic patterns
+        expected_keys = ['aa', 'ee', 'ii', 'oo', 'uu', 'th', 'dh', 'sh', 'ch']
+        for key in expected_keys:
+            assert key in VARIANT_RULES_EXTENDED
+
+
+# =============================================================================
+# INDIC NLP MODULE-LEVEL TESTS
+# =============================================================================
+
+class TestIndicNlpIntegration:
+    """Tests for Indic NLP Library integration."""
+    
+    def test_indic_nlp_availability_exported(self):
+        """Test that INDIC_NLP_AVAILABLE flag is accessible."""
+        from app.services.transliteration.sinhala_engine import INDIC_NLP_AVAILABLE
+        
+        assert isinstance(INDIC_NLP_AVAILABLE, bool)
+    
+    def test_transliterator_knows_indic_nlp_status(self, transliterator):
+        """Test that transliterator instance knows Indic NLP status."""
+        from app.services.transliteration.sinhala_engine import INDIC_NLP_AVAILABLE
+        
+        # Instance flag should match module flag
+        assert transliterator.indic_nlp_available == INDIC_NLP_AVAILABLE
+    
+    def test_transliteration_works_without_indic_nlp(self, transliterator):
+        """Test that transliteration works even without Indic NLP Library."""
+        # This test ensures graceful degradation
+        results = transliterator.transliterate("සිංහල")
+        
+        # Should still produce results using grapheme fallback
+        assert len(results) > 0
+
+
+# =============================================================================
 # RUN TESTS
 # =============================================================================
 

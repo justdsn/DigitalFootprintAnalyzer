@@ -21,6 +21,12 @@ spacy>=3.7.0              # NLP library for NER
 # python -m spacy download en_core_web_sm
 
 # -----------------------------------------------------------------------------
+# Indic NLP Processing (Phase 2 - Hybrid Transliteration)
+# -----------------------------------------------------------------------------
+indic-nlp-library>=0.91   # Indic language NLP library for transliteration
+morfessor>=2.0.6          # Morphological segmentation (dependency for indic-nlp)
+
+# -----------------------------------------------------------------------------
 # Development & Testing
 # -----------------------------------------------------------------------------
 pytest>=7.4.0             # Testing framework
