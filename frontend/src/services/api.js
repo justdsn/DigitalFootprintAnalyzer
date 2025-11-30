@@ -198,6 +198,97 @@ export async function analyzeUsername(username) {
 }
 
 // =============================================================================
+// SCAN OPTIONS API
+// =============================================================================
+
+/**
+ * Get available scan options (Light Scan and Deep Scan)
+ * 
+ * @returns {Promise<Object>} Scan options with details about each scan type
+ * 
+ * @example
+ * const options = await getScanOptions();
+ * // Returns: {
+ * //   light_scan: { name: "Light Scan", ... },
+ * //   deep_scan: { name: "Deep Scan", requires_extension: true, ... }
+ * // }
+ */
+export async function getScanOptions() {
+  return fetchWithTimeout(`${API_BASE_URL}/scan-options`);
+}
+
+// =============================================================================
+// LIGHT SCAN API
+// =============================================================================
+
+/**
+ * Perform a light scan using Google Dorking to find profiles
+ * 
+ * @param {string} identifierType - Type of identifier (name, email, username)
+ * @param {string} identifierValue - The identifier value to search for
+ * @param {string} [location="Sri Lanka"] - Location filter for search
+ * @returns {Promise<Object>} Light scan results grouped by platform
+ * 
+ * @example
+ * const results = await lightScan('name', 'John Perera', 'Sri Lanka');
+ * // Returns: {
+ * //   success: true,
+ * //   scan_type: "light",
+ * //   total_results: 12,
+ * //   platforms: [...],
+ * //   ...
+ * // }
+ */
+export async function lightScan(identifierType, identifierValue, location = "Sri Lanka") {
+  if (!identifierValue || !identifierValue.trim()) {
+    throw new ApiError('Identifier value is required', 400);
+  }
+
+  return fetchWithTimeout(`${API_BASE_URL}/light-scan`, {
+    method: 'POST',
+    body: JSON.stringify({
+      identifier_type: identifierType,
+      identifier_value: identifierValue.trim(),
+      location: location
+    }),
+  });
+}
+
+// =============================================================================
+// DEEP SCAN API
+// =============================================================================
+
+/**
+ * Perform a deep scan (requires browser extension)
+ * 
+ * @param {string} identifierType - Type of identifier (name, email, username)
+ * @param {string} identifierValue - The identifier value to search for
+ * @returns {Promise<Object>} Deep scan response (placeholder - requires extension)
+ * 
+ * @example
+ * const result = await deepScan('username', 'john_doe');
+ * // Returns: {
+ * //   success: false,
+ * //   message: "Deep Scan requires the browser extension...",
+ * //   extension_required: true,
+ * //   ...
+ * // }
+ */
+export async function deepScan(identifierType, identifierValue) {
+  if (!identifierValue || !identifierValue.trim()) {
+    throw new ApiError('Identifier value is required', 400);
+  }
+
+  return fetchWithTimeout(`${API_BASE_URL}/deep-scan`, {
+    method: 'POST',
+    body: JSON.stringify({
+      identifier_type: identifierType,
+      identifier_value: identifierValue.trim()
+    }),
+  });
+}
+
+// =============================================================================
 // DEFAULT EXPORT
 // =============================================================================
 
@@ -208,6 +299,9 @@ const api = {
   analyzeUsername,
   transliterate,
   correlateProfiles,
+  getScanOptions,
+  lightScan,
+  deepScan,
   ApiError,
 };
 
