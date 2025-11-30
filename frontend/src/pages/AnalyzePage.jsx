@@ -13,6 +13,44 @@ const VIEW_LOADING = 'loading';
 const VIEW_RESULTS = 'results';
 const VIEW_DEEP_SCAN_MESSAGE = 'deep_scan_message';
 
+// Identifier detection constants
+const EMAIL_PATTERN = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const NAME_LETTER_RATIO_THRESHOLD = 0.8;
+const NAME_MIN_PARTS = 2;
+
+/**
+ * Check if the identifier is an email address
+ * @param {string} identifier - The identifier to check
+ * @returns {boolean} - True if it looks like an email
+ */
+function isEmail(identifier) {
+  return EMAIL_PATTERN.test(identifier);
+}
+
+/**
+ * Check if the identifier is a full name (contains spaces, mostly letters)
+ * @param {string} identifier - The identifier to check
+ * @returns {boolean} - True if it looks like a name
+ */
+function isName(identifier) {
+  if (!identifier.includes(' ')) {
+    return false;
+  }
+  
+  const letterCount = (identifier.match(/[a-zA-Z\s]/g) || []).length;
+  const letterRatio = letterCount / identifier.length;
+  
+  if (letterRatio < NAME_LETTER_RATIO_THRESHOLD) {
+    return false;
+  }
+  
+  const parts = identifier.split(' ').filter(p => p.length > 0);
+  const hasEnoughParts = parts.length >= NAME_MIN_PARTS;
+  const allPartsStartWithLetter = parts.every(p => /^[a-zA-Z]/.test(p));
+  
+  return hasEnoughParts && allPartsStartWithLetter;
+}
+
 /**
  * Detect identifier type from input string
  * @param {string} identifier - The identifier to analyze
@@ -21,24 +59,14 @@ const VIEW_DEEP_SCAN_MESSAGE = 'deep_scan_message';
 function detectIdentifierType(identifier) {
   const trimmed = identifier.trim();
   
-  // Email detection
-  const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-  if (emailPattern.test(trimmed)) {
+  if (isEmail(trimmed)) {
     return 'email';
   }
   
-  // Name detection - contains spaces and mostly letters
-  if (trimmed.includes(' ')) {
-    const letterCount = (trimmed.match(/[a-zA-Z\s]/g) || []).length;
-    if (letterCount / trimmed.length >= 0.8) {
-      const parts = trimmed.split(' ').filter(p => p.length > 0);
-      if (parts.length >= 2 && parts.every(p => /^[a-zA-Z]/.test(p))) {
-        return 'name';
-      }
-    }
+  if (isName(trimmed)) {
+    return 'name';
   }
   
-  // Default to username
   return 'username';
 }
 

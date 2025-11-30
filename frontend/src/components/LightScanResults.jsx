@@ -226,7 +226,11 @@ function ResultCard({ result, platformId }) {
             {title || 'Untitled Profile'}
           </h4>
           {snippet && (
-            <p className="text-sm text-slate-500 line-clamp-2 mb-2">{snippet}</p>
+            <p className="text-sm text-slate-500 mb-2 overflow-hidden" style={{ 
+              display: '-webkit-box', 
+              WebkitLineClamp: 2, 
+              WebkitBoxOrient: 'vertical' 
+            }}>{snippet}</p>
           )}
           <p className="text-xs text-slate-400 truncate">{url}</p>
         </div>
