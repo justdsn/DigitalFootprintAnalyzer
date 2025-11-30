@@ -14,6 +14,8 @@ This module provides services for social media profile analysis:
 - PhoneNumberLookup: Sri Lankan phone validation and carrier ID
 - PIIExposureAnalyzer: Analyze PII exposure across platforms
 - Platform Scrapers: Specialized scrapers for each platform
+- GoogleDorkSearcher: Search profiles using Google Dork queries
+- HybridProfileFinder: Combine Google Dorking with direct URL checking
 
 Example Usage:
     from app.services.social import (
@@ -22,6 +24,8 @@ Example Usage:
         SocialMediaDataCollector,
         PhoneNumberLookup,
         PIIExposureAnalyzer,
+        GoogleDorkSearcher,
+        HybridProfileFinder,
     )
     
     # Generate profile URLs
@@ -43,6 +47,14 @@ Example Usage:
     # Analyze PII exposure
     analyzer = PIIExposureAnalyzer()
     report = analyzer.analyze(platform_data, user_identifiers)
+    
+    # Google Dork search
+    dorker = GoogleDorkSearcher()
+    results = dorker.search_by_username("john_doe")
+    
+    # Hybrid profile finder
+    finder = HybridProfileFinder()
+    results = await finder.find_profiles("john_doe", "username")
 """
 
 from .profile_generator import ProfileURLGenerator
@@ -59,6 +71,8 @@ from .platform_scrapers import (
     get_scraper,
     scrape_all_platforms,
 )
+from .google_dorker import GoogleDorkSearcher
+from .profile_finder import HybridProfileFinder
 
 __all__ = [
     "ProfileURLGenerator",
@@ -73,4 +87,6 @@ __all__ = [
     "LinkedInScraper",
     "get_scraper",
     "scrape_all_platforms",
+    "GoogleDorkSearcher",
+    "HybridProfileFinder",
 ]
