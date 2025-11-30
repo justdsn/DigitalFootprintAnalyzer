@@ -49,7 +49,7 @@ class TestPlatformURLGeneration:
         result = analyzer.generate_platform_urls("johndoe")
         
         # Check all expected platforms are present
-        expected_platforms = ["facebook", "instagram", "twitter", "linkedin", "tiktok", "youtube"]
+        expected_platforms = ["facebook", "instagram", "twitter", "linkedin"]
         for platform in expected_platforms:
             assert platform in result
     
@@ -73,17 +73,7 @@ class TestPlatformURLGeneration:
         """Test LinkedIn URL format."""
         result = analyzer.generate_platform_urls("johndoe")
         assert result["linkedin"]["url"] == "https://www.linkedin.com/in/johndoe"
-    
-    def test_tiktok_url_format(self, analyzer):
-        """Test TikTok URL format."""
-        result = analyzer.generate_platform_urls("johndoe")
-        assert result["tiktok"]["url"] == "https://www.tiktok.com/@johndoe"
-    
-    def test_youtube_url_format(self, analyzer):
-        """Test YouTube URL format."""
-        result = analyzer.generate_platform_urls("johndoe")
-        assert result["youtube"]["url"] == "https://www.youtube.com/@johndoe"
-    
+
     def test_username_with_at_symbol_stripped(self, analyzer):
         """Test that @ symbol is stripped from username."""
         result = analyzer.generate_platform_urls("@johndoe")

@@ -135,14 +135,6 @@ class PIIExtractor:
             "linkedin": re.compile(
                 r'(?:https?://)?(?:www\.)?linkedin\.com/in/[a-zA-Z0-9_-]+',
                 re.IGNORECASE
-            ),
-            "tiktok": re.compile(
-                r'(?:https?://)?(?:www\.)?tiktok\.com/@[a-zA-Z0-9._]+',
-                re.IGNORECASE
-            ),
-            "youtube": re.compile(
-                r'(?:https?://)?(?:www\.)?youtube\.com/(?:@|user/|channel/)[a-zA-Z0-9_-]+',
-                re.IGNORECASE
             )
         }
     
@@ -280,8 +272,6 @@ class PIIExtractor:
         - Instagram
         - Twitter/X
         - LinkedIn
-        - TikTok
-        - YouTube
         
         Args:
             text: Input text to search for social URLs

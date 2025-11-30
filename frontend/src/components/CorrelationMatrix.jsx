@@ -35,8 +35,6 @@ const PLATFORM_ICONS = {
   x: '𝕏',
   instagram: '📸',
   linkedin: '💼',
-  tiktok: '🎵',
-  youtube: '📺',
   default: '🌐'
 };
 

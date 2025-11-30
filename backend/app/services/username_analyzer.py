@@ -9,7 +9,7 @@
 Username Analyzer Service
 
 This module provides username analysis capabilities:
-- Generate platform-specific profile URLs (Facebook, Instagram, X, LinkedIn, TikTok, YouTube)
+- Generate platform-specific profile URLs (Facebook, Instagram, X, LinkedIn)
 - Generate username variations for impersonation detection
 - Analyze username patterns to identify suspicious characteristics
 
@@ -70,16 +70,6 @@ class UsernameAnalyzer:
             "name": "LinkedIn",
             "url_template": "https://www.linkedin.com/in/{username}",
             "icon": "linkedin"
-        },
-        "tiktok": {
-            "name": "TikTok",
-            "url_template": "https://www.tiktok.com/@{username}",
-            "icon": "tiktok"
-        },
-        "youtube": {
-            "name": "YouTube",
-            "url_template": "https://www.youtube.com/@{username}",
-            "icon": "youtube"
         }
     }
     
