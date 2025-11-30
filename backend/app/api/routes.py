@@ -26,7 +26,7 @@ Each endpoint includes comprehensive error handling and validation.
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import StreamingResponse
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import time
 import logging
 import re
@@ -129,8 +129,45 @@ impersonation_detector = ImpersonationDetector()
 report_builder = ReportBuilder()
 pdf_generator = PDFGenerator()
 
-# In-memory report storage (for demo purposes - use database in production)
-report_cache: Dict[str, Dict[str, Any]] = {}
+# In-memory report storage with TTL (for demo purposes - use database in production)
+# Stores tuples of (timestamp, report_data) for TTL-based cleanup
+REPORT_CACHE_TTL_SECONDS = 3600  # 1 hour TTL
+MAX_CACHE_SIZE = 100  # Maximum number of reports to cache
+report_cache: Dict[str, tuple] = {}
+
+
+def _cleanup_old_reports():
+    """Remove expired reports from cache to prevent memory leaks."""
+    current_time = time.time()
+    expired_keys = [
+        key for key, (timestamp, _) in report_cache.items()
+        if current_time - timestamp > REPORT_CACHE_TTL_SECONDS
+    ]
+    for key in expired_keys:
+        del report_cache[key]
+    
+    # If still over max size, remove oldest entries
+    if len(report_cache) > MAX_CACHE_SIZE:
+        sorted_items = sorted(report_cache.items(), key=lambda x: x[1][0])
+        for key, _ in sorted_items[:len(report_cache) - MAX_CACHE_SIZE]:
+            del report_cache[key]
+
+
+def _store_report(report_id: str, report_data: Dict[str, Any]):
+    """Store report with timestamp for TTL tracking."""
+    _cleanup_old_reports()
+    report_cache[report_id] = (time.time(), report_data)
+
+
+def _get_report(report_id: str) -> Optional[Dict[str, Any]]:
+    """Get report if exists and not expired."""
+    if report_id not in report_cache:
+        return None
+    timestamp, report_data = report_cache[report_id]
+    if time.time() - timestamp > REPORT_CACHE_TTL_SECONDS:
+        del report_cache[report_id]
+        return None
+    return report_data
 
 
 # =============================================================================
@@ -1916,8 +1953,8 @@ async def enhanced_scan(request: EnhancedScanRequest) -> AnalysisReportResponse:
             impersonation_risks=impersonation_risks
         )
         
-        # Store report in cache for PDF generation
-        report_cache[report["report_id"]] = report
+        # Store report in cache for PDF generation (with TTL)
+        _store_report(report["report_id"], report)
         
         # Convert to response model
         return AnalysisReportResponse(
@@ -1992,14 +2029,13 @@ async def download_pdf_report(report_id: str):
         HTTPException: 404 if report not found
     """
     try:
-        # Check if report exists in cache
-        if report_id not in report_cache:
+        # Check if report exists in cache (with TTL check)
+        report_data = _get_report(report_id)
+        if report_data is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Report with ID '{report_id}' not found. Reports are only available for a limited time after generation."
+                detail=f"Report with ID '{report_id}' not found or has expired. Reports are available for 1 hour after generation."
             )
-        
-        report_data = report_cache[report_id]
         
         # Generate PDF
         pdf_bytes = pdf_generator.generate(report_data)
@@ -2046,14 +2082,13 @@ async def download_json_report(report_id: str):
     import json
     
     try:
-        # Check if report exists in cache
-        if report_id not in report_cache:
+        # Check if report exists in cache (with TTL check)
+        report_data = _get_report(report_id)
+        if report_data is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Report with ID '{report_id}' not found. Reports are only available for a limited time after generation."
+                detail=f"Report with ID '{report_id}' not found or has expired. Reports are available for 1 hour after generation."
             )
-        
-        report_data = report_cache[report_id]
         
         # Convert to JSON
         json_str = json.dumps(report_data, indent=2, ensure_ascii=False)
