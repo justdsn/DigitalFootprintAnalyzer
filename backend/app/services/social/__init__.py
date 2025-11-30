@@ -2,6 +2,7 @@
 # SOCIAL MEDIA SERVICES MODULE
 # =============================================================================
 # Phase 3: Social Media Data Collection & Profile Checking
+# Phase 4: Impersonation Detection
 # =============================================================================
 
 """
@@ -16,6 +17,7 @@ This module provides services for social media profile analysis:
 - Platform Scrapers: Specialized scrapers for each platform
 - GoogleDorkSearcher: Search profiles using Google Dork queries
 - HybridProfileFinder: Combine Google Dorking with direct URL checking
+- ImpersonationDetector: Detect potential impersonation accounts
 
 Example Usage:
     from app.services.social import (
@@ -26,6 +28,7 @@ Example Usage:
         PIIExposureAnalyzer,
         GoogleDorkSearcher,
         HybridProfileFinder,
+        ImpersonationDetector,
     )
     
     # Generate profile URLs
@@ -55,6 +58,10 @@ Example Usage:
     # Hybrid profile finder
     finder = HybridProfileFinder()
     results = await finder.find_profiles("john_doe", "username")
+    
+    # Detect impersonation
+    detector = ImpersonationDetector()
+    risks = detector.detect(platform_data, user_identifiers)
 """
 
 from .profile_generator import ProfileURLGenerator
@@ -73,6 +80,7 @@ from .platform_scrapers import (
 )
 from .google_dorker import GoogleDorkSearcher
 from .profile_finder import HybridProfileFinder
+from .impersonation_detector import ImpersonationDetector
 
 __all__ = [
     "ProfileURLGenerator",
@@ -89,4 +97,5 @@ __all__ = [
     "scrape_all_platforms",
     "GoogleDorkSearcher",
     "HybridProfileFinder",
+    "ImpersonationDetector",
 ]

@@ -18,15 +18,19 @@ This module defines the following endpoints:
 - POST /api/collect-profile-data - Collect profile data (Phase 3)
 - POST /api/phone-lookup - Phone number lookup (Phase 3)
 - POST /api/full-scan - Full scan analysis (Phase 3)
+- POST /api/scan - Enhanced flexible scan (Phase 4)
+- GET /api/report/{report_id}/pdf - Download PDF report (Phase 4)
 
 Each endpoint includes comprehensive error handling and validation.
 """
 
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import StreamingResponse
 from typing import Dict, Any, List
 import time
 import logging
 import re
+import io
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -65,6 +69,12 @@ from app.models.schemas import (
     # Flexible Scan schemas (Hybrid Profile Discovery)
     FlexibleScanRequest,
     FlexibleScanResponse,
+    # Phase 4 - Enhanced Report schemas
+    EnhancedScanRequest,
+    AnalysisReportResponse,
+    ImpersonationRisk,
+    CompleteFindings,
+    ReportSummary,
 )
 
 # Import services
@@ -82,6 +92,13 @@ from app.services.social import (
     PIIExposureAnalyzer,
     scrape_all_platforms,
     HybridProfileFinder,
+    ImpersonationDetector,
+)
+# Phase 4 services - Report generation
+from app.services.report import (
+    ReportBuilder,
+    PDFGenerator,
+    SUPPORTED_PLATFORMS,
 )
 
 
@@ -107,6 +124,13 @@ phone_lookup = PhoneNumberLookup()
 exposure_analyzer = PIIExposureAnalyzer()
 # Hybrid Profile Discovery service
 hybrid_profile_finder = HybridProfileFinder()
+# Phase 4 service instances
+impersonation_detector = ImpersonationDetector()
+report_builder = ReportBuilder()
+pdf_generator = PDFGenerator()
+
+# In-memory report storage (for demo purposes - use database in production)
+report_cache: Dict[str, Dict[str, Any]] = {}
 
 
 # =============================================================================
@@ -1815,4 +1839,241 @@ async def flexible_scan(request: FlexibleScanRequest) -> FlexibleScanResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred during profile scan: {str(e)}"
+        )
+
+
+# =============================================================================
+# ENHANCED SCAN ENDPOINT (Phase 4 - Report Presentation & PDF Export)
+# =============================================================================
+
+@router.post(
+    "/enhanced-scan",
+    response_model=AnalysisReportResponse,
+    summary="Enhanced Profile Scan with Report",
+    description="""
+    Comprehensive scan with enhanced report presentation.
+    
+    This endpoint performs:
+    1. Profile discovery across Facebook, Instagram, LinkedIn, and X
+    2. PII exposure analysis
+    3. Impersonation detection
+    4. Risk assessment
+    5. Comprehensive report generation with PDF export
+    
+    Only supports 3 identifier types: name, email, username (NO phone).
+    Only checks 4 platforms: Facebook, Instagram, LinkedIn, X (NO YouTube, TikTok).
+    
+    Returns a detailed report with complete findings and export URLs.
+    """
+)
+async def enhanced_scan(request: EnhancedScanRequest) -> AnalysisReportResponse:
+    """
+    Perform enhanced scan with comprehensive report generation.
+    
+    Args:
+        request: EnhancedScanRequest with identifier_type and identifier_value
+        
+    Returns:
+        AnalysisReportResponse: Comprehensive report with all findings
+    """
+    try:
+        # Build user identifiers dict
+        user_identifiers = {
+            "location": request.location or "Sri Lanka"
+        }
+        
+        # Set identifier based on type
+        if request.identifier_type.value == "username":
+            user_identifiers["username"] = request.identifier_value.lstrip('@')
+        elif request.identifier_type.value == "email":
+            user_identifiers["email"] = request.identifier_value.lower()
+            # Extract username from email
+            user_identifiers["username"] = request.identifier_value.split('@')[0]
+        elif request.identifier_type.value == "name":
+            user_identifiers["name"] = request.identifier_value
+            # Generate username from name
+            name_parts = request.identifier_value.lower().split()
+            if len(name_parts) >= 2:
+                user_identifiers["username"] = f"{name_parts[0]}{name_parts[-1]}"
+            else:
+                user_identifiers["username"] = name_parts[0] if name_parts else request.identifier_value.lower().replace(" ", "")
+        
+        username = user_identifiers.get("username", "")
+        
+        # Step 1: Scrape all platforms for profile data
+        platform_data = await scrape_all_platforms(username)
+        
+        # Step 2: Analyze PII exposure
+        exposure_report = exposure_analyzer.analyze(platform_data, user_identifiers)
+        
+        # Step 3: Detect impersonation risks
+        impersonation_risks = impersonation_detector.detect(platform_data, user_identifiers)
+        
+        # Step 4: Build comprehensive report
+        report = report_builder.build_report(
+            scan_results=exposure_report,
+            user_identifiers=user_identifiers,
+            impersonation_risks=impersonation_risks
+        )
+        
+        # Store report in cache for PDF generation
+        report_cache[report["report_id"]] = report
+        
+        # Convert to response model
+        return AnalysisReportResponse(
+            success=report["success"],
+            report_id=report["report_id"],
+            generated_at=report["generated_at"],
+            identifier=report["identifier"],
+            risk_assessment=report["risk_assessment"],
+            impersonation_risks=[
+                ImpersonationRisk(
+                    platform=r["platform"],
+                    profile_url=r["profile_url"],
+                    profile_name=r["profile_name"],
+                    risk_level=r["risk_level"],
+                    risk_emoji=r["risk_emoji"],
+                    confidence_score=r["confidence_score"],
+                    indicators=r["indicators"],
+                    recommendation=r["recommendation"],
+                    report_url=r["report_url"]
+                )
+                for r in report.get("impersonation_risks", [])
+            ],
+            exposed_pii=report["exposed_pii"],
+            platforms=report["platforms"],
+            recommendations=report["recommendations"],
+            cross_language=report.get("cross_language"),
+            complete_findings=CompleteFindings(
+                discovered_profiles=report["complete_findings"]["discovered_profiles"],
+                exposed_pii_details=report["complete_findings"]["exposed_pii_details"]
+            ),
+            summary=ReportSummary(
+                total_platforms_checked=report["summary"]["total_platforms_checked"],
+                total_profiles_found=report["summary"]["total_profiles_found"],
+                total_pii_exposed=report["summary"]["total_pii_exposed"],
+                critical_high_risk_items=report["summary"]["critical_high_risk_items"],
+                medium_risk_items=report["summary"]["medium_risk_items"],
+                low_risk_items=report["summary"]["low_risk_items"],
+                impersonation_risks_detected=report["summary"]["impersonation_risks_detected"],
+                profile_links=report["summary"]["profile_links"]
+            ),
+            export=report["export"]
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in enhanced_scan endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during enhanced scan: {str(e)}"
+        )
+
+
+# =============================================================================
+# PDF REPORT DOWNLOAD ENDPOINT (Phase 4)
+# =============================================================================
+
+@router.get(
+    "/report/{report_id}/pdf",
+    summary="Download PDF Report",
+    description="Download the analysis report as a PDF file."
+)
+async def download_pdf_report(report_id: str):
+    """
+    Download analysis report as PDF.
+    
+    Args:
+        report_id: The unique report identifier
+        
+    Returns:
+        StreamingResponse: PDF file download
+        
+    Raises:
+        HTTPException: 404 if report not found
+    """
+    try:
+        # Check if report exists in cache
+        if report_id not in report_cache:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Report with ID '{report_id}' not found. Reports are only available for a limited time after generation."
+            )
+        
+        report_data = report_cache[report_id]
+        
+        # Generate PDF
+        pdf_bytes = pdf_generator.generate(report_data)
+        
+        # Create streaming response
+        buffer = io.BytesIO(pdf_bytes)
+        
+        return StreamingResponse(
+            buffer,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=digital-footprint-report-{report_id[:8]}.pdf"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating PDF report: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred generating the PDF report: {str(e)}"
+        )
+
+
+@router.get(
+    "/report/{report_id}/json",
+    summary="Download JSON Report",
+    description="Download the analysis report as a JSON file."
+)
+async def download_json_report(report_id: str):
+    """
+    Download analysis report as JSON.
+    
+    Args:
+        report_id: The unique report identifier
+        
+    Returns:
+        StreamingResponse: JSON file download
+        
+    Raises:
+        HTTPException: 404 if report not found
+    """
+    import json
+    
+    try:
+        # Check if report exists in cache
+        if report_id not in report_cache:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Report with ID '{report_id}' not found. Reports are only available for a limited time after generation."
+            )
+        
+        report_data = report_cache[report_id]
+        
+        # Convert to JSON
+        json_str = json.dumps(report_data, indent=2, ensure_ascii=False)
+        
+        # Create streaming response
+        buffer = io.BytesIO(json_str.encode('utf-8'))
+        
+        return StreamingResponse(
+            buffer,
+            media_type="application/json",
+            headers={
+                "Content-Disposition": f"attachment; filename=digital-footprint-report-{report_id[:8]}.json"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating JSON report: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred generating the JSON report: {str(e)}"
         )
