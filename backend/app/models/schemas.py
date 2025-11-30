@@ -1801,3 +1801,300 @@ class EnhancedScanRequest(BaseModel):
         if not v or not v.strip():
             raise ValueError("Identifier value cannot be empty")
         return v.strip()
+
+
+# =============================================================================
+# LIGHT SCAN MODELS (Google Dorking Profile Discovery)
+# =============================================================================
+
+class ScanType(str, Enum):
+    """
+    Enum for scan types.
+    """
+    LIGHT = "light"
+    DEEP = "deep"
+
+
+class LightScanRequest(BaseModel):
+    """
+    Request model for light scan endpoint (Google Dorking).
+    
+    Only supports 3 identifier types: name, email, username (NO phone).
+    
+    Attributes:
+        identifier_type: Type of identifier ('name', 'email', 'username')
+        identifier_value: The identifier value to search for
+        location: Optional location filter (default: Sri Lanka)
+    
+    Example:
+        {
+            "identifier_type": "name",
+            "identifier_value": "John Perera",
+            "location": "Sri Lanka"
+        }
+    """
+    identifier_type: str = Field(
+        ...,
+        description="Type of identifier: 'name', 'email', or 'username' (NO phone)"
+    )
+    identifier_value: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="The identifier value to search for",
+        examples=["john_doe", "john@example.com", "John Perera"]
+    )
+    location: Optional[str] = Field(
+        default="Sri Lanka",
+        description="Location filter for searches",
+        examples=["Sri Lanka", "Colombo", "Kandy"]
+    )
+    
+    @field_validator("identifier_type")
+    @classmethod
+    def validate_identifier_type(cls, v: str) -> str:
+        """Validate identifier type is one of the supported types."""
+        valid_types = ["name", "email", "username"]
+        if v.lower() not in valid_types:
+            raise ValueError(
+                f"identifier_type must be one of: {valid_types}. "
+                "Phone number is NOT supported for Light Scan."
+            )
+        return v.lower()
+    
+    @field_validator("identifier_value")
+    @classmethod
+    def validate_light_scan_identifier_value(cls, v: str) -> str:
+        """Validate and clean the identifier value."""
+        if not v or not v.strip():
+            raise ValueError("Identifier value cannot be empty")
+        return v.strip()
+
+
+class DorkResult(BaseModel):
+    """
+    Model for a single Google Dork search result.
+    
+    Attributes:
+        title: Page title from search result
+        url: URL of the found profile
+        snippet: Description snippet from search result (optional)
+        query_used: The dork query that found this result
+    
+    Example:
+        {
+            "title": "John Perera - Colombo, Sri Lanka",
+            "url": "https://www.facebook.com/john.perera.colombo",
+            "snippet": "Software Engineer at ABC Tech...",
+            "query_used": "site:facebook.com \"John Perera\" \"Sri Lanka\""
+        }
+    """
+    title: str = Field(
+        ...,
+        description="Page title from search result"
+    )
+    url: str = Field(
+        ...,
+        description="URL of the found profile"
+    )
+    snippet: Optional[str] = Field(
+        default=None,
+        description="Description snippet from search result"
+    )
+    query_used: str = Field(
+        ...,
+        description="The dork query that found this result"
+    )
+
+
+class PlatformDorkResults(BaseModel):
+    """
+    Model for dork results from a single platform.
+    
+    Attributes:
+        platform: Platform identifier (facebook, instagram, linkedin, x)
+        platform_emoji: Emoji/icon for the platform
+        results_count: Number of results found
+        results: List of DorkResult items
+        queries_used: List of dork queries used for this platform
+    
+    Example:
+        {
+            "platform": "facebook",
+            "platform_emoji": "📘",
+            "results_count": 4,
+            "results": [...],
+            "queries_used": ["site:facebook.com \"John Perera\"", ...]
+        }
+    """
+    platform: str = Field(
+        ...,
+        description="Platform identifier"
+    )
+    platform_emoji: str = Field(
+        ...,
+        description="Emoji/icon for the platform"
+    )
+    results_count: int = Field(
+        ...,
+        ge=0,
+        description="Number of results found"
+    )
+    results: List[DorkResult] = Field(
+        default_factory=list,
+        description="List of found results"
+    )
+    queries_used: List[str] = Field(
+        default_factory=list,
+        description="List of dork queries used"
+    )
+
+
+class LightScanResponse(BaseModel):
+    """
+    Response model for light scan endpoint.
+    
+    Contains all results from Google Dorking grouped by platform.
+    
+    Attributes:
+        success: Whether the scan completed successfully
+        scan_type: Always "light" for this response
+        scan_id: Unique scan identifier (e.g., "LS-ABC12345")
+        identifier: Dict with type and value of the searched identifier
+        location: Location filter used
+        scan_duration_seconds: Time taken to complete the scan
+        total_results: Total number of results found across all platforms
+        platforms: List of PlatformDorkResults for each platform
+        summary: Dict mapping platform to result count
+        all_urls: Flat list of all found URLs with platform and title
+        deep_scan_available: Whether deep scan is available
+        deep_scan_message: Message about deep scan availability
+    
+    Example:
+        {
+            "success": true,
+            "scan_type": "light",
+            "scan_id": "LS-ABC12345",
+            "identifier": {"type": "name", "value": "John Perera"},
+            "location": "Sri Lanka",
+            "scan_duration_seconds": 28.5,
+            "total_results": 12,
+            "platforms": [...],
+            "summary": {"facebook": 4, "instagram": 3, "linkedin": 3, "x": 2},
+            "all_urls": [...],
+            "deep_scan_available": true,
+            "deep_scan_message": "Want more detailed analysis?..."
+        }
+    """
+    success: bool = Field(
+        ...,
+        description="Whether the scan completed successfully"
+    )
+    scan_type: str = Field(
+        default="light",
+        description="Type of scan performed"
+    )
+    scan_id: str = Field(
+        ...,
+        description="Unique scan identifier"
+    )
+    identifier: Dict[str, str] = Field(
+        ...,
+        description="Searched identifier info with 'type' and 'value'"
+    )
+    location: str = Field(
+        ...,
+        description="Location filter used"
+    )
+    scan_duration_seconds: float = Field(
+        ...,
+        description="Time taken to complete the scan"
+    )
+    total_results: int = Field(
+        ...,
+        ge=0,
+        description="Total number of results found"
+    )
+    platforms: List[PlatformDorkResults] = Field(
+        ...,
+        description="Results grouped by platform"
+    )
+    summary: Dict[str, int] = Field(
+        ...,
+        description="Summary of result counts per platform"
+    )
+    all_urls: List[Dict[str, str]] = Field(
+        ...,
+        description="Flat list of all found URLs"
+    )
+    deep_scan_available: bool = Field(
+        default=True,
+        description="Whether deep scan is available"
+    )
+    deep_scan_message: str = Field(
+        ...,
+        description="Message about deep scan availability"
+    )
+
+
+class ScanOptionsResponse(BaseModel):
+    """
+    Response model for scan options endpoint.
+    
+    Describes available scan types and their capabilities.
+    
+    Example:
+        {
+            "light_scan": {
+                "name": "Light Scan",
+                "description": "Fast Google Dorking...",
+                "supported_identifiers": ["name", "email", "username"],
+                "platforms": ["facebook", "instagram", "linkedin", "x"]
+            },
+            "deep_scan": {
+                "name": "Deep Scan",
+                "description": "Comprehensive analysis...",
+                "requires_extension": true
+            }
+        }
+    """
+    light_scan: Dict[str, Any] = Field(
+        ...,
+        description="Light scan options and capabilities"
+    )
+    deep_scan: Dict[str, Any] = Field(
+        ...,
+        description="Deep scan options and capabilities"
+    )
+
+
+class DeepScanResponse(BaseModel):
+    """
+    Response model for deep scan placeholder endpoint.
+    
+    Indicates that deep scan requires the browser extension.
+    
+    Example:
+        {
+            "success": false,
+            "message": "Deep Scan requires the browser extension...",
+            "extension_required": true,
+            "extension_info": {...}
+        }
+    """
+    success: bool = Field(
+        default=False,
+        description="Whether the scan was performed"
+    )
+    message: str = Field(
+        ...,
+        description="Message explaining why deep scan wasn't performed"
+    )
+    extension_required: bool = Field(
+        default=True,
+        description="Whether the browser extension is required"
+    )
+    extension_info: Dict[str, str] = Field(
+        ...,
+        description="Information about the required extension"
+    )
