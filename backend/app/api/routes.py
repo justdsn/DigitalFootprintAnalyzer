@@ -75,6 +75,13 @@ from app.models.schemas import (
     ImpersonationRisk,
     CompleteFindings,
     ReportSummary,
+    # Light Scan schemas (Google Dorking)
+    LightScanRequest,
+    LightScanResponse,
+    DorkResult,
+    PlatformDorkResults,
+    ScanOptionsResponse,
+    DeepScanResponse,
 )
 
 # Import services
@@ -100,6 +107,8 @@ from app.services.report import (
     PDFGenerator,
     SUPPORTED_PLATFORMS,
 )
+# Light Scan service (Google Dorking)
+from app.services.scan import LightScanService
 
 
 # =============================================================================
@@ -128,6 +137,8 @@ hybrid_profile_finder = HybridProfileFinder()
 impersonation_detector = ImpersonationDetector()
 report_builder = ReportBuilder()
 pdf_generator = PDFGenerator()
+# Light Scan service instance
+light_scan_service = LightScanService()
 
 # In-memory report storage with TTL (for demo purposes - use database in production)
 # Stores tuples of (timestamp, report_data) for TTL-based cleanup
@@ -2112,3 +2123,230 @@ async def download_json_report(report_id: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred generating the JSON report: {str(e)}"
         )
+
+
+# =============================================================================
+# LIGHT SCAN ENDPOINTS (Google Dorking Profile Discovery)
+# =============================================================================
+
+@router.post(
+    "/light-scan",
+    response_model=LightScanResponse,
+    summary="Light Scan - Google Dorking Profile Discovery",
+    description="""
+    Perform a light scan using Google Dorking to find potential profile matches.
+    
+    This endpoint:
+    1. Generates Google Dork queries for each supported platform
+    2. Executes searches using Google
+    3. Parses results for valid profile URLs
+    4. Filters out non-profile URLs (search pages, help pages, etc.)
+    5. Deduplicates results
+    6. Returns results grouped by platform
+    
+    **Supported Identifier Types:**
+    - name: Full name (e.g., "John Perera") - uses location filter
+    - email: Email address (e.g., "john@example.com") - extracts username
+    - username: Social media handle (e.g., "john_doe") - generates variations
+    
+    **Note:** Phone number is NOT supported for Light Scan.
+    
+    **Supported Platforms:**
+    - Facebook (📘)
+    - Instagram (📷)
+    - LinkedIn (💼)
+    - X/Twitter (𝕏)
+    """
+)
+async def light_scan(request: LightScanRequest) -> LightScanResponse:
+    """
+    Perform light scan using Google Dorking.
+    
+    Args:
+        request: LightScanRequest containing identifier_type, identifier_value, and optional location
+    
+    Returns:
+        LightScanResponse: Scan results grouped by platform
+    
+    Raises:
+        HTTPException: 400 if identifier type is invalid
+        HTTPException: 500 for internal processing errors
+    
+    Example:
+        Input: {
+            "identifier_type": "name",
+            "identifier_value": "John Perera",
+            "location": "Sri Lanka"
+        }
+        Output: {
+            "success": true,
+            "scan_type": "light",
+            "scan_id": "LS-ABC12345",
+            "total_results": 12,
+            "platforms": [...],
+            ...
+        }
+    """
+    try:
+        # Perform light scan
+        result = await light_scan_service.scan(
+            identifier_type=request.identifier_type,
+            identifier_value=request.identifier_value,
+            location=request.location
+        )
+        
+        # Convert platform results to Pydantic models
+        platforms = [
+            PlatformDorkResults(
+                platform=p["platform"],
+                platform_emoji=p["platform_emoji"],
+                results_count=p["results_count"],
+                results=[
+                    DorkResult(
+                        title=r["title"],
+                        url=r["url"],
+                        snippet=r.get("snippet"),
+                        query_used=r["query_used"]
+                    )
+                    for r in p["results"]
+                ],
+                queries_used=p["queries_used"]
+            )
+            for p in result["platforms"]
+        ]
+        
+        return LightScanResponse(
+            success=result["success"],
+            scan_type=result["scan_type"],
+            scan_id=result["scan_id"],
+            identifier=result["identifier"],
+            location=result["location"],
+            scan_duration_seconds=result["scan_duration_seconds"],
+            total_results=result["total_results"],
+            platforms=platforms,
+            summary=result["summary"],
+            all_urls=result["all_urls"],
+            deep_scan_available=result["deep_scan_available"],
+            deep_scan_message=result["deep_scan_message"]
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error in light_scan endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during light scan: {str(e)}"
+        )
+
+
+@router.get(
+    "/scan-options",
+    response_model=ScanOptionsResponse,
+    summary="Get Scan Options",
+    description="Get information about available scan types (Light and Deep)."
+)
+async def get_scan_options() -> ScanOptionsResponse:
+    """
+    Get information about available scan options.
+    
+    Returns:
+        ScanOptionsResponse: Information about Light and Deep scan options
+    """
+    return ScanOptionsResponse(
+        light_scan={
+            "name": "Light Scan",
+            "description": (
+                "Fast profile discovery using Google Dorking. "
+                "No authentication required. Finds potential profiles based on "
+                "search results across supported platforms."
+            ),
+            "supported_identifiers": ["name", "email", "username"],
+            "platforms": ["facebook", "instagram", "linkedin", "x"],
+            "platform_emojis": {
+                "facebook": "📘",
+                "instagram": "📷",
+                "linkedin": "💼",
+                "x": "𝕏"
+            },
+            "features": [
+                "Google Dork query generation",
+                "Multiple platform support",
+                "Location filtering",
+                "Username variation detection",
+                "URL deduplication"
+            ],
+            "limitations": [
+                "Phone number NOT supported",
+                "Results depend on Google index",
+                "May include false positives",
+                "Rate limited to avoid blocking"
+            ]
+        },
+        deep_scan={
+            "name": "Deep Scan",
+            "description": (
+                "Comprehensive analysis using browser extension for detailed "
+                "profile data extraction and verification."
+            ),
+            "requires_extension": True,
+            "supported_identifiers": ["name", "email", "username"],
+            "platforms": ["facebook", "instagram", "linkedin", "x"],
+            "features": [
+                "Detailed profile analysis",
+                "Profile verification",
+                "Extended data extraction",
+                "Impersonation detection"
+            ],
+            "status": "Extension required"
+        }
+    )
+
+
+@router.post(
+    "/deep-scan",
+    response_model=DeepScanResponse,
+    summary="Deep Scan (Placeholder)",
+    description="""
+    Placeholder endpoint for Deep Scan functionality.
+    
+    Deep Scan requires the browser extension for comprehensive analysis.
+    This endpoint returns information about the extension requirement.
+    """
+)
+async def deep_scan(request: LightScanRequest) -> DeepScanResponse:
+    """
+    Deep scan placeholder endpoint.
+    
+    Returns a message indicating that the browser extension is required.
+    
+    Args:
+        request: LightScanRequest (same as light scan for consistency)
+    
+    Returns:
+        DeepScanResponse: Message about extension requirement
+    """
+    return DeepScanResponse(
+        success=False,
+        message=(
+            "Deep Scan requires the Digital Footprint Analyzer browser extension. "
+            "The extension provides comprehensive profile analysis including "
+            "detailed data extraction, profile verification, and impersonation detection. "
+            "Please install the extension to use Deep Scan functionality."
+        ),
+        extension_required=True,
+        extension_info={
+            "name": "Digital Footprint Analyzer Extension",
+            "description": (
+                "Browser extension for comprehensive social media profile analysis"
+            ),
+            "status": "Coming Soon",
+            "features": (
+                "Profile verification, Extended data extraction, "
+                "Impersonation detection, Cross-platform correlation"
+            )
+        }
+    )
