@@ -21,6 +21,14 @@ Supported Platforms:
 
 NO phone number support in Light Scan (as per requirements).
 
+Note on Google Search Usage:
+    This service uses Google Search to perform dork queries. Rate limiting
+    is implemented (3 seconds between requests) to reduce the risk of being
+    blocked. For production use, consider:
+    - Using Google's Custom Search JSON API for proper authentication
+    - Implementing exponential backoff for rate limiting
+    - Using multiple IP addresses/proxies for higher volume
+
 Example Usage:
     service = LightScanService()
     result = await service.scan(
@@ -115,7 +123,8 @@ class LightScanService:
     REQUEST_TIMEOUT = 15.0
     
     # Rate limiting configuration
-    DELAY_BETWEEN_REQUESTS = 2.0  # seconds
+    # Using 3 seconds between requests to reduce risk of being rate limited
+    DELAY_BETWEEN_REQUESTS = 3.0  # seconds
     
     def __init__(self):
         """Initialize the Light Scan Service."""
@@ -491,7 +500,8 @@ class LightScanService:
                 )
                 return results
             
-            # Parse HTML response
+            # Parse HTML response using lxml parser (included in requirements.txt)
+            # lxml is faster and more robust than html.parser
             soup = BeautifulSoup(response.text, "lxml")
             
             # Extract search results
@@ -602,40 +612,42 @@ class LightScanService:
         if not url or platform_id not in self.PLATFORMS:
             return False
         
-        url_lower = url.lower()
         config = self.PLATFORMS[platform_id]
         
-        # Check if URL belongs to the correct platform
+        # Parse the URL to extract the hostname
+        try:
+            parsed = urlparse(url)
+            hostname = parsed.hostname or ""
+            hostname_lower = hostname.lower()
+            path = parsed.path.strip("/")
+        except Exception:
+            return False
+        
+        # Check if URL belongs to the correct platform using hostname parsing
+        # This prevents substring matching vulnerabilities (e.g., "fakex.com")
         if platform_id == "x":
             # X can be either x.com or twitter.com
-            if not ("x.com" in url_lower or "twitter.com" in url_lower):
+            valid_hosts = ["x.com", "www.x.com", "twitter.com", "www.twitter.com"]
+            if hostname_lower not in valid_hosts:
                 return False
         elif platform_id == "linkedin":
-            # LinkedIn must have /in/ path
-            if "linkedin.com/in" not in url_lower:
+            # LinkedIn must be linkedin.com domain and have /in/ path
+            valid_hosts = ["linkedin.com", "www.linkedin.com"]
+            if hostname_lower not in valid_hosts:
+                return False
+            if not path.startswith("in/"):
                 return False
         else:
-            # Other platforms - check domain
-            platform_domain = f"{platform_id}.com"
-            if platform_domain not in url_lower:
+            # Other platforms - check exact domain
+            valid_hosts = [f"{platform_id}.com", f"www.{platform_id}.com"]
+            if hostname_lower not in valid_hosts:
                 return False
         
         # Check against exclude patterns
+        url_lower = url.lower()
         for pattern in self._compiled_exclude_patterns[platform_id]:
             if pattern.search(url_lower):
                 return False
-        
-        # Validate URL structure with profile pattern
-        profile_pattern = config.get("profile_pattern")
-        if profile_pattern:
-            if re.search(profile_pattern, url):
-                return True
-            # If doesn't match profile pattern, might still be valid
-            # but we're being conservative
-        
-        # Basic validation - URL should not end with domain only
-        parsed = urlparse(url)
-        path = parsed.path.strip("/")
         
         # Must have a path (username)
         if not path:
@@ -645,6 +657,13 @@ class LightScanService:
         if path.count("/") > 2:
             return False
         
+        # If we have a profile pattern, use it for additional validation
+        # but don't require it to match (allows for URL variations)
+        profile_pattern = config.get("profile_pattern")
+        if profile_pattern and re.search(profile_pattern, url):
+            return True
+        
+        # If no pattern match, still accept if basic validation passed
         return True
     
     # -------------------------------------------------------------------------
