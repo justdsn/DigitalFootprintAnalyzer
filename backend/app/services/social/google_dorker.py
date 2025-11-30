@@ -34,12 +34,6 @@ from typing import Dict, List, Optional, Any
 from urllib.parse import quote_plus
 import logging
 
-try:
-    import httpx
-    HTTPX_AVAILABLE = True
-except ImportError:
-    HTTPX_AVAILABLE = False
-
 # Set up logger
 logger = logging.getLogger(__name__)
 
