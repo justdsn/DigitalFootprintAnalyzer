@@ -1337,3 +1337,149 @@ class ExposureScanResponse(BaseModel):
         ...,
         description="Actionable recommendations specific to exposed data"
     )
+
+
+# =============================================================================
+# FLEXIBLE SCAN MODELS (Hybrid Profile Discovery)
+# =============================================================================
+
+class FlexibleScanRequest(BaseModel):
+    """
+    Request model for flexible scan endpoint using hybrid profile discovery.
+    
+    Users can provide any single identifier (name, email, username, or phone)
+    and the system will use Google Dorking and direct URL checking to find
+    social media profiles.
+    
+    Attributes:
+        identifier_type: Type of identifier being provided
+        identifier_value: The actual identifier value
+        location: Optional location filter for name-based searches (default: Sri Lanka)
+        check_existence: Whether to verify profile existence via HTTP (default: True)
+    
+    Example:
+        {
+            "identifier_type": "username",
+            "identifier_value": "john_doe"
+        }
+        
+        {
+            "identifier_type": "email",
+            "identifier_value": "john.perera@gmail.com"
+        }
+        
+        {
+            "identifier_type": "phone",
+            "identifier_value": "0771234567"
+        }
+        
+        {
+            "identifier_type": "name",
+            "identifier_value": "John Perera",
+            "location": "Colombo"
+        }
+    """
+    identifier_type: IdentifierType = Field(
+        ...,
+        description="Type of identifier: name, email, username, or phone"
+    )
+    identifier_value: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="The identifier value to search for",
+        examples=["john_doe", "john@example.com", "0771234567", "John Perera"]
+    )
+    location: Optional[str] = Field(
+        default="Sri Lanka",
+        description="Location filter for name-based searches",
+        examples=["Sri Lanka", "Colombo", "Kandy"]
+    )
+    check_existence: bool = Field(
+        default=True,
+        description="Whether to verify profile existence via HTTP requests"
+    )
+    
+    @field_validator("identifier_value")
+    @classmethod
+    def validate_identifier_value(cls, v: str) -> str:
+        """Validate and clean the identifier value."""
+        if not v or not v.strip():
+            raise ValueError("Identifier value cannot be empty")
+        return v.strip()
+
+
+class FlexibleScanResponse(BaseModel):
+    """
+    Response model for flexible scan endpoint.
+    
+    Contains hybrid profile discovery results combining Google Dorking
+    and direct URL checking methods.
+    
+    Attributes:
+        identifier: The searched identifier value
+        identifier_type: Type of identifier used
+        timestamp: When the scan was performed
+        location_filter: Location filter applied (for name searches)
+        dork_results: Google Dork search queries generated
+        direct_check_results: Results from direct URL checking
+        combined_results: Deduplicated combined results
+        username_variations: Generated username variations
+        platforms_checked: List of platforms checked
+        summary: Summary statistics
+    
+    Example:
+        {
+            "identifier": "john_doe",
+            "identifier_type": "username",
+            "timestamp": "2024-01-15T10:30:00Z",
+            "combined_results": {
+                "by_platform": {...},
+                "found_profiles": [...]
+            },
+            "summary": {
+                "total_profiles_found": 3,
+                "platforms_with_profiles": 2
+            }
+        }
+    """
+    identifier: str = Field(
+        ...,
+        description="The searched identifier value"
+    )
+    identifier_type: str = Field(
+        ...,
+        description="Type of identifier (name, email, username, phone)"
+    )
+    timestamp: str = Field(
+        ...,
+        description="ISO 8601 timestamp of when scan was performed"
+    )
+    location_filter: Optional[str] = Field(
+        default=None,
+        description="Location filter applied for name searches"
+    )
+    dork_results: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Google Dork search queries generated"
+    )
+    direct_check_results: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Results from direct URL checking"
+    )
+    combined_results: Dict[str, Any] = Field(
+        ...,
+        description="Deduplicated combined results from both methods"
+    )
+    username_variations: List[str] = Field(
+        default_factory=list,
+        description="Generated username variations"
+    )
+    platforms_checked: List[str] = Field(
+        default_factory=list,
+        description="List of platforms checked"
+    )
+    summary: Dict[str, int] = Field(
+        ...,
+        description="Summary statistics"
+    )

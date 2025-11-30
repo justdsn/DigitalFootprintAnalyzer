@@ -62,6 +62,9 @@ from app.models.schemas import (
     ExposedPIIItem,
     PlatformExposure,
     ExposureScanResponse,
+    # Flexible Scan schemas (Hybrid Profile Discovery)
+    FlexibleScanRequest,
+    FlexibleScanResponse,
 )
 
 # Import services
@@ -78,6 +81,7 @@ from app.services.social import (
     PhoneNumberLookup,
     PIIExposureAnalyzer,
     scrape_all_platforms,
+    HybridProfileFinder,
 )
 
 
@@ -101,6 +105,8 @@ data_collector = SocialMediaDataCollector()
 phone_lookup = PhoneNumberLookup()
 # Phase 3 Enhancement services
 exposure_analyzer = PIIExposureAnalyzer()
+# Hybrid Profile Discovery service
+hybrid_profile_finder = HybridProfileFinder()
 
 
 # =============================================================================
@@ -1723,4 +1729,90 @@ async def exposure_scan(request: ExposureScanRequest) -> ExposureScanResponse:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred during exposure scan: {str(e)}"
+        )
+
+
+# =============================================================================
+# FLEXIBLE SCAN ENDPOINT (Hybrid Profile Discovery)
+# =============================================================================
+
+@router.post(
+    "/scan",
+    response_model=FlexibleScanResponse,
+    summary="Flexible Profile Scan",
+    description="""
+    Hybrid profile discovery endpoint that combines Google Dorking with 
+    direct URL checking.
+    
+    Users can provide any single identifier:
+    - **name**: Full name (e.g., "John Perera") - searches with location filter
+    - **email**: Email address (e.g., "john@gmail.com") - extracts username
+    - **username**: Social media handle (e.g., "john_doe") - generates variations
+    - **phone**: Sri Lankan phone number (e.g., "0771234567") - various formats
+    
+    This endpoint performs:
+    1. Google Dork query generation for each supported platform
+    2. Username variation generation (from name/email)
+    3. Direct URL checking to verify profile existence
+    4. Result deduplication and combination
+    
+    No authentication needed - uses public Google search.
+    Sri Lanka focused with location filtering.
+    """
+)
+async def flexible_scan(request: FlexibleScanRequest) -> FlexibleScanResponse:
+    """
+    Perform hybrid profile discovery scan.
+    
+    Combines Google Dorking and direct URL checking to discover
+    social media profiles for any identifier type.
+    
+    Args:
+        request: FlexibleScanRequest containing identifier_type and identifier_value
+    
+    Returns:
+        FlexibleScanResponse: Comprehensive profile discovery results
+    
+    Example:
+        Input: {"identifier_type": "username", "identifier_value": "john_doe"}
+        Output: {
+            "identifier": "john_doe",
+            "identifier_type": "username",
+            "combined_results": {
+                "found_profiles": [...],
+                "by_platform": {...}
+            },
+            "summary": {
+                "total_profiles_found": 3,
+                "platforms_with_profiles": 2
+            }
+        }
+    """
+    try:
+        # Perform hybrid profile discovery
+        result = await hybrid_profile_finder.find_profiles(
+            identifier=request.identifier_value,
+            identifier_type=request.identifier_type.value,
+            location=request.location,
+            check_existence=request.check_existence
+        )
+        
+        return FlexibleScanResponse(
+            identifier=result["identifier"],
+            identifier_type=result["identifier_type"],
+            timestamp=result["timestamp"],
+            location_filter=result["location_filter"],
+            dork_results=result["dork_results"],
+            direct_check_results=result["direct_check_results"],
+            combined_results=result["combined_results"],
+            username_variations=result["username_variations"],
+            platforms_checked=result["platforms_checked"],
+            summary=result["summary"]
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in flexible_scan endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during profile scan: {str(e)}"
         )
