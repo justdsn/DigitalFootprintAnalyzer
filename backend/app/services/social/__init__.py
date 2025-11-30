@@ -12,13 +12,16 @@ This module provides services for social media profile analysis:
 - ProfileExistenceChecker: Check if profiles exist on platforms
 - SocialMediaDataCollector: Extract public data from profile pages
 - PhoneNumberLookup: Sri Lankan phone validation and carrier ID
+- PIIExposureAnalyzer: Analyze PII exposure across platforms
+- Platform Scrapers: Specialized scrapers for each platform
 
 Example Usage:
     from app.services.social import (
         ProfileURLGenerator,
         ProfileExistenceChecker,
         SocialMediaDataCollector,
-        PhoneNumberLookup
+        PhoneNumberLookup,
+        PIIExposureAnalyzer,
     )
     
     # Generate profile URLs
@@ -36,16 +39,38 @@ Example Usage:
     # Phone lookup
     lookup = PhoneNumberLookup()
     info = lookup.lookup("0771234567")
+    
+    # Analyze PII exposure
+    analyzer = PIIExposureAnalyzer()
+    report = analyzer.analyze(platform_data, user_identifiers)
 """
 
 from .profile_generator import ProfileURLGenerator
 from .profile_checker import ProfileExistenceChecker
 from .data_collector import SocialMediaDataCollector
 from .phone_lookup import PhoneNumberLookup
+from .exposure_analyzer import PIIExposureAnalyzer
+from .platform_scrapers import (
+    BasePlatformScraper,
+    FacebookScraper,
+    InstagramScraper,
+    TwitterXScraper,
+    LinkedInScraper,
+    get_scraper,
+    scrape_all_platforms,
+)
 
 __all__ = [
     "ProfileURLGenerator",
     "ProfileExistenceChecker",
     "SocialMediaDataCollector",
-    "PhoneNumberLookup"
+    "PhoneNumberLookup",
+    "PIIExposureAnalyzer",
+    "BasePlatformScraper",
+    "FacebookScraper",
+    "InstagramScraper",
+    "TwitterXScraper",
+    "LinkedInScraper",
+    "get_scraper",
+    "scrape_all_platforms",
 ]
