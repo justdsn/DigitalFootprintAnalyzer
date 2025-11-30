@@ -45,6 +45,11 @@ beautifulsoup4>=4.12.0    # HTML parsing for profile data extraction
 lxml>=5.1.0               # Fast XML/HTML parser backend for BeautifulSoup
 
 # -----------------------------------------------------------------------------
+# PDF Generation (Enhanced Report Presentation)
+# -----------------------------------------------------------------------------
+reportlab>=4.0.0          # PDF report generation
+
+# -----------------------------------------------------------------------------
 # Utilities
 # -----------------------------------------------------------------------------
 python-multipart>=0.0.6   # Form data parsing

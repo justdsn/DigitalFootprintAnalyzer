@@ -1483,3 +1483,321 @@ class FlexibleScanResponse(BaseModel):
         ...,
         description="Summary statistics"
     )
+
+
+# =============================================================================
+# ENHANCED REPORT MODELS (Phase 4 - Results Presentation & PDF Export)
+# =============================================================================
+
+class ProfileLinks(BaseModel):
+    """
+    Links for a discovered profile.
+    
+    Attributes:
+        view_profile: Direct link to view the profile
+        privacy_settings: Link to platform privacy settings
+        report_profile: Link to report the profile
+    """
+    view_profile: Optional[str] = Field(
+        default=None,
+        description="Direct link to view the profile"
+    )
+    privacy_settings: Optional[str] = Field(
+        default=None,
+        description="Link to platform privacy settings"
+    )
+    report_profile: Optional[str] = Field(
+        default=None,
+        description="Link to report the profile"
+    )
+
+
+class DiscoveredProfileDetail(BaseModel):
+    """
+    Detailed information about a discovered profile.
+    
+    Attributes:
+        index: Order/index of the profile
+        platform: Platform name
+        platform_emoji: Platform icon/emoji
+        found: Whether profile was found
+        profile_name: Name on the profile
+        username: Username on the platform
+        profile_url: Direct profile URL
+        discovery_source: How the profile was discovered
+        links: Related links for the profile
+        checked_urls: URLs checked if profile not found
+    """
+    index: int = Field(..., description="Order/index of the profile")
+    platform: str = Field(..., description="Platform name")
+    platform_emoji: str = Field(..., description="Platform icon/emoji")
+    found: bool = Field(..., description="Whether profile was found")
+    profile_name: Optional[str] = Field(default=None, description="Name on the profile")
+    username: Optional[str] = Field(default=None, description="Username on the platform")
+    profile_url: Optional[str] = Field(default=None, description="Direct profile URL")
+    discovery_source: str = Field(..., description="How the profile was discovered")
+    links: ProfileLinks = Field(..., description="Related links for the profile")
+    checked_urls: Optional[List[str]] = Field(
+        default=None,
+        description="URLs checked if profile not found"
+    )
+
+
+class PIISourceDetail(BaseModel):
+    """
+    Source details for exposed PII.
+    
+    Attributes:
+        platform: Platform name where PII was found
+        platform_emoji: Platform icon/emoji
+        location_in_profile: Where in the profile the PII was found
+        profile_url: URL to the profile
+        direct_link: Direct link to the specific location
+    """
+    platform: str = Field(..., description="Platform name where PII was found")
+    platform_emoji: str = Field(..., description="Platform icon/emoji")
+    location_in_profile: str = Field(..., description="Where in the profile the PII was found")
+    profile_url: str = Field(..., description="URL to the profile")
+    direct_link: str = Field(..., description="Direct link to the specific location")
+
+
+class ExposedPIIDetail(BaseModel):
+    """
+    Detailed information about an exposed PII item.
+    
+    Attributes:
+        index: Order/index of the PII item
+        pii_type: Type of PII (email, phone, name, etc.)
+        pii_emoji: Emoji icon for the PII type
+        pii_label: Human-readable label for the PII type
+        exposed_value: The actual exposed value
+        exposed_value_sinhala: Sinhala translation if applicable
+        risk_level: Risk level (critical, high, medium, low)
+        risk_emoji: Emoji for risk level
+        risk_description: Description of the risk
+        matches_user_input: Whether this matches user's provided identifier
+        found_on: List of sources where PII was found
+        recommended_action: Recommended action to take
+    """
+    index: int = Field(..., description="Order/index of the PII item")
+    pii_type: str = Field(..., description="Type of PII")
+    pii_emoji: str = Field(..., description="Emoji icon for the PII type")
+    pii_label: str = Field(..., description="Human-readable label for the PII type")
+    exposed_value: str = Field(..., description="The actual exposed value")
+    exposed_value_sinhala: Optional[str] = Field(
+        default=None,
+        description="Sinhala translation if applicable"
+    )
+    risk_level: str = Field(..., description="Risk level (critical, high, medium, low)")
+    risk_emoji: str = Field(..., description="Emoji for risk level")
+    risk_description: str = Field(..., description="Description of the risk")
+    matches_user_input: Optional[bool] = Field(
+        default=None,
+        description="Whether this matches user's provided identifier"
+    )
+    found_on: List[PIISourceDetail] = Field(
+        default_factory=list,
+        description="List of sources where PII was found"
+    )
+    recommended_action: str = Field(..., description="Recommended action to take")
+
+
+class ImpersonationRisk(BaseModel):
+    """
+    Information about a detected impersonation risk.
+    
+    Attributes:
+        platform: Platform where risk was detected
+        profile_url: URL to the suspicious profile
+        profile_name: Name on the suspicious profile
+        risk_level: Risk level (high, medium, low)
+        risk_emoji: Emoji for risk level
+        confidence_score: Confidence score (0-1)
+        indicators: List of indicator details
+        recommendation: Recommended action
+        report_url: URL to report the profile
+    """
+    platform: str = Field(..., description="Platform where risk was detected")
+    profile_url: str = Field(..., description="URL to the suspicious profile")
+    profile_name: str = Field(..., description="Name on the suspicious profile")
+    risk_level: str = Field(..., description="Risk level (high, medium, low)")
+    risk_emoji: str = Field(..., description="Emoji for risk level")
+    confidence_score: float = Field(..., ge=0, le=1, description="Confidence score")
+    indicators: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of indicator details"
+    )
+    recommendation: str = Field(..., description="Recommended action")
+    report_url: str = Field(..., description="URL to report the profile")
+
+
+class CompleteFindings(BaseModel):
+    """
+    Complete findings section with all discovered profiles and exposed PII.
+    
+    Attributes:
+        discovered_profiles: List of all discovered profile details
+        exposed_pii_details: List of all exposed PII details
+    """
+    discovered_profiles: List[DiscoveredProfileDetail] = Field(
+        default_factory=list,
+        description="List of all discovered profile details"
+    )
+    exposed_pii_details: List[ExposedPIIDetail] = Field(
+        default_factory=list,
+        description="List of all exposed PII details"
+    )
+
+
+class ReportSummary(BaseModel):
+    """
+    Summary statistics for the analysis report.
+    
+    Attributes:
+        total_platforms_checked: Number of platforms checked
+        total_profiles_found: Number of profiles found
+        total_pii_exposed: Total number of exposed PII items
+        critical_high_risk_items: Count of critical and high risk items
+        medium_risk_items: Count of medium risk items
+        low_risk_items: Count of low risk items
+        impersonation_risks_detected: Number of impersonation risks
+        profile_links: Dictionary of platform to profile URL mappings
+    """
+    total_platforms_checked: int = Field(..., description="Number of platforms checked")
+    total_profiles_found: int = Field(..., description="Number of profiles found")
+    total_pii_exposed: int = Field(..., description="Total number of exposed PII items")
+    critical_high_risk_items: int = Field(..., description="Count of critical and high risk items")
+    medium_risk_items: int = Field(..., description="Count of medium risk items")
+    low_risk_items: int = Field(..., description="Count of low risk items")
+    impersonation_risks_detected: int = Field(..., description="Number of impersonation risks")
+    profile_links: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Dictionary of platform to profile URL mappings"
+    )
+
+
+class AnalysisReportResponse(BaseModel):
+    """
+    Comprehensive analysis report response.
+    
+    Contains all analysis results including risk assessment,
+    impersonation risks, exposed PII, platform breakdown,
+    recommendations, and complete findings.
+    
+    Attributes:
+        success: Whether the analysis was successful
+        report_id: Unique report identifier
+        generated_at: ISO 8601 timestamp
+        identifier: Identifier information
+        risk_assessment: Risk assessment details
+        impersonation_risks: List of impersonation risks
+        exposed_pii: Exposed PII categorized by severity
+        platforms: Platform breakdown list
+        recommendations: Prioritized recommendations
+        cross_language: Cross-language support (Sinhala)
+        complete_findings: Complete findings with all links
+        summary: Summary statistics
+        export: Export URLs for PDF/JSON
+    """
+    success: bool = Field(..., description="Whether the analysis was successful")
+    report_id: str = Field(..., description="Unique report identifier")
+    generated_at: str = Field(..., description="ISO 8601 timestamp")
+    identifier: Dict[str, Any] = Field(..., description="Identifier information")
+    risk_assessment: Dict[str, Any] = Field(..., description="Risk assessment details")
+    impersonation_risks: List[ImpersonationRisk] = Field(
+        default_factory=list,
+        description="List of impersonation risks"
+    )
+    exposed_pii: Dict[str, List[Dict[str, Any]]] = Field(
+        default_factory=dict,
+        description="Exposed PII categorized by severity"
+    )
+    platforms: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Platform breakdown list"
+    )
+    recommendations: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Prioritized recommendations"
+    )
+    cross_language: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Cross-language support (Sinhala)"
+    )
+    complete_findings: CompleteFindings = Field(
+        ...,
+        description="Complete findings with all links"
+    )
+    summary: ReportSummary = Field(..., description="Summary statistics")
+    export: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Export URLs for PDF/JSON"
+    )
+
+
+# =============================================================================
+# ENHANCED FLEXIBLE SCAN REQUEST (Updated to support only 3 identifier types)
+# =============================================================================
+
+class EnhancedIdentifierType(str, Enum):
+    """
+    Enum for supported identifier types (NO phone).
+    Only name, email, and username are supported.
+    """
+    NAME = "name"
+    EMAIL = "email"
+    USERNAME = "username"
+
+
+class EnhancedScanRequest(BaseModel):
+    """
+    Request model for enhanced scan endpoint.
+    
+    Only supports 3 identifier types: name, email, username (NO phone).
+    
+    Attributes:
+        identifier_type: Type of identifier (name, email, username only)
+        identifier_value: The identifier value to search for
+        location: Optional location filter (default: Sri Lanka)
+    
+    Example:
+        {
+            "identifier_type": "username",
+            "identifier_value": "john_doe"
+        }
+        
+        {
+            "identifier_type": "email",
+            "identifier_value": "john@example.com"
+        }
+        
+        {
+            "identifier_type": "name",
+            "identifier_value": "John Perera",
+            "location": "Colombo"
+        }
+    """
+    identifier_type: EnhancedIdentifierType = Field(
+        ...,
+        description="Type of identifier: name, email, or username (NO phone)"
+    )
+    identifier_value: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="The identifier value to search for",
+        examples=["john_doe", "john@example.com", "John Perera"]
+    )
+    location: Optional[str] = Field(
+        default="Sri Lanka",
+        description="Location filter for searches",
+        examples=["Sri Lanka", "Colombo", "Kandy"]
+    )
+    
+    @field_validator("identifier_value")
+    @classmethod
+    def validate_identifier_value(cls, v: str) -> str:
+        """Validate and clean the identifier value."""
+        if not v or not v.strip():
+            raise ValueError("Identifier value cannot be empty")
+        return v.strip()
