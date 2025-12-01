@@ -2098,3 +2098,225 @@ class DeepScanResponse(BaseModel):
         ...,
         description="Information about the required extension"
     )
+
+
+# =============================================================================
+# DEEP SCAN ANALYZE MODELS (Browser Extension Integration)
+# =============================================================================
+
+class ExtractedProfileData(BaseModel):
+    """
+    Profile data extracted by the browser extension content scripts.
+    
+    Attributes:
+        platform: Platform identifier (facebook, instagram, linkedin, x)
+        name: Display name from profile
+        username: Username/handle
+        profileUrl: URL to the profile
+        profileImage: Profile image URL
+        bio: Profile bio/description
+        location: Location if available
+        email: Email if publicly visible
+        phone: Phone if publicly visible
+        website: Website link if available
+        followers: Follower count
+        following: Following count
+        isVerified: Verified account status
+        extractedPII: PII extracted from visible content
+    """
+    platform: str = Field(..., description="Platform identifier")
+    name: Optional[str] = Field(default=None, description="Display name")
+    username: Optional[str] = Field(default=None, description="Username/handle")
+    profileUrl: Optional[str] = Field(default=None, description="Profile URL")
+    profileImage: Optional[str] = Field(default=None, description="Profile image URL")
+    bio: Optional[str] = Field(default=None, description="Profile bio")
+    location: Optional[str] = Field(default=None, description="Location")
+    email: Optional[str] = Field(default=None, description="Email if visible")
+    phone: Optional[str] = Field(default=None, description="Phone if visible")
+    website: Optional[str] = Field(default=None, description="Website link")
+    followers: Optional[str] = Field(default=None, description="Follower count")
+    following: Optional[str] = Field(default=None, description="Following count")
+    isVerified: bool = Field(default=False, description="Verified status")
+    extractedPII: Dict[str, List[str]] = Field(
+        default_factory=dict,
+        description="Extracted PII (emails, phones, urls, mentions)"
+    )
+
+
+class PlatformScanResult(BaseModel):
+    """
+    Scan results for a single platform.
+    
+    Attributes:
+        platform: Platform display name
+        emoji: Platform emoji icon
+        status: Scan status (completed, error, timeout)
+        profiles: List of extracted profile data
+        searchResults: List of search result profiles
+        errors: List of error messages
+    """
+    platform: str = Field(..., description="Platform display name")
+    emoji: str = Field(..., description="Platform emoji icon")
+    status: str = Field(..., description="Scan status")
+    profiles: List[ExtractedProfileData] = Field(
+        default_factory=list,
+        description="Extracted profile data"
+    )
+    searchResults: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Search result profiles"
+    )
+    errors: List[str] = Field(
+        default_factory=list,
+        description="Error messages"
+    )
+
+
+class DeepScanAnalyzeRequest(BaseModel):
+    """
+    Request model for deep scan analyze endpoint.
+    
+    Receives data collected by the browser extension and processes it
+    for comprehensive analysis.
+    
+    Attributes:
+        scan_id: Unique scan identifier from extension
+        identifier_type: Type of identifier searched (name, email, username)
+        identifier_value: The value that was searched
+        platforms_scanned: List of platforms that were scanned
+        results: Scan results grouped by platform
+        scan_duration_ms: Time taken to complete scan
+        generate_pdf: Whether to generate PDF report
+    
+    Example:
+        {
+            "scan_id": "DS-ABC12345",
+            "identifier_type": "username",
+            "identifier_value": "john_doe",
+            "platforms_scanned": ["facebook", "instagram"],
+            "results": {...},
+            "scan_duration_ms": 15000
+        }
+    """
+    scan_id: str = Field(
+        ...,
+        min_length=1,
+        description="Unique scan identifier from extension"
+    )
+    identifier_type: str = Field(
+        ...,
+        description="Type of identifier (name, email, username)"
+    )
+    identifier_value: str = Field(
+        ...,
+        min_length=1,
+        description="The value that was searched"
+    )
+    platforms_scanned: List[str] = Field(
+        default_factory=list,
+        description="List of platforms scanned"
+    )
+    results: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Scan results grouped by platform"
+    )
+    scan_duration_ms: Optional[int] = Field(
+        default=None,
+        description="Time taken to complete scan in milliseconds"
+    )
+    generate_pdf: bool = Field(
+        default=False,
+        description="Whether to generate PDF report"
+    )
+    
+    @field_validator("identifier_value")
+    @classmethod
+    def validate_identifier(cls, v: str) -> str:
+        """Validate identifier is not empty."""
+        if not v or not v.strip():
+            raise ValueError("Identifier value cannot be empty")
+        return v.strip()
+
+
+class DeepScanAnalyzeResponse(BaseModel):
+    """
+    Response model for deep scan analyze endpoint.
+    
+    Returns comprehensive analysis of the extension-collected data.
+    
+    Attributes:
+        success: Whether analysis was successful
+        scan_id: Original scan ID
+        report_id: Generated report ID for PDF download
+        analysis_timestamp: When analysis was performed
+        identifier: Analyzed identifier info
+        platforms_analyzed: Number of platforms with data
+        total_profiles_found: Total profiles discovered
+        total_pii_exposed: Total PII items found
+        risk_score: Overall risk score (0-100)
+        risk_level: Risk level (low, medium, high, critical)
+        exposed_pii: List of exposed PII items
+        platform_summary: Summary per platform
+        impersonation_risks: Detected impersonation risks
+        recommendations: Privacy recommendations
+        pdf_url: URL to download PDF report (if generated)
+    """
+    success: bool = Field(..., description="Whether analysis succeeded")
+    scan_id: str = Field(..., description="Original scan ID")
+    report_id: Optional[str] = Field(
+        default=None,
+        description="Report ID for PDF download"
+    )
+    analysis_timestamp: str = Field(
+        ...,
+        description="ISO 8601 timestamp of analysis"
+    )
+    identifier: Dict[str, str] = Field(
+        ...,
+        description="Analyzed identifier info"
+    )
+    platforms_analyzed: int = Field(
+        ...,
+        ge=0,
+        description="Number of platforms with data"
+    )
+    total_profiles_found: int = Field(
+        ...,
+        ge=0,
+        description="Total profiles discovered"
+    )
+    total_pii_exposed: int = Field(
+        ...,
+        ge=0,
+        description="Total PII items found"
+    )
+    risk_score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="Overall risk score"
+    )
+    risk_level: str = Field(
+        ...,
+        description="Risk level category"
+    )
+    exposed_pii: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of exposed PII items"
+    )
+    platform_summary: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Summary per platform"
+    )
+    impersonation_risks: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Detected impersonation risks"
+    )
+    recommendations: List[str] = Field(
+        default_factory=list,
+        description="Privacy recommendations"
+    )
+    pdf_url: Optional[str] = Field(
+        default=None,
+        description="URL to download PDF report"
+    )

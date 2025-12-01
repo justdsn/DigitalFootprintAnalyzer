@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Digital Footprint Analyzer</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo">
+        <img src="../icons/icon48.png" alt="Logo" class="logo-icon">
+        <div class="logo-text">
+          <h1>Digital Footprint</h1>
+          <span class="subtitle">Analyzer</span>
+        </div>
+      </div>
+      <div class="status-indicator" id="statusIndicator">
+        <span class="status-dot"></span>
+        <span class="status-text">Ready</span>
+      </div>
+    </header>
+
+    <!-- Scan Form -->
+    <section class="scan-form" id="scanForm">
+      <div class="form-group">
+        <label for="identifierType">Search By</label>
+        <select id="identifierType" class="form-select">
+          <option value="username">Username</option>
+          <option value="name">Full Name</option>
+          <option value="email">Email Address</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label for="identifierValue">Enter Value</label>
+        <input 
+          type="text" 
+          id="identifierValue" 
+          class="form-input" 
+          placeholder="e.g., john_doe"
+        >
+      </div>
+
+      <div class="form-group">
+        <label>Platforms to Scan</label>
+        <div class="platform-checkboxes">
+          <label class="checkbox-label">
+            <input type="checkbox" name="platform" value="facebook" checked>
+            <span class="platform-icon">📘</span> Facebook
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" name="platform" value="instagram" checked>
+            <span class="platform-icon">📷</span> Instagram
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" name="platform" value="linkedin" checked>
+            <span class="platform-icon">💼</span> LinkedIn
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" name="platform" value="x" checked>
+            <span class="platform-icon">𝕏</span> X (Twitter)
+          </label>
+        </div>
+      </div>
+
+      <button type="button" id="startScanBtn" class="btn btn-primary">
+        <span class="btn-icon">🔍</span>
+        Start Deep Scan
+      </button>
+    </section>
+
+    <!-- Progress Section -->
+    <section class="scan-progress hidden" id="scanProgress">
+      <div class="progress-header">
+        <h2>Scanning in Progress</h2>
+        <button id="cancelScanBtn" class="btn btn-secondary btn-sm">Cancel</button>
+      </div>
+      
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-text" id="progressText">Initializing...</div>
+
+      <div class="platform-status" id="platformStatus">
+        <!-- Platform status items will be inserted here -->
+      </div>
+    </section>
+
+    <!-- Results Section -->
+    <section class="scan-results hidden" id="scanResults">
+      <div class="results-header">
+        <h2>Scan Complete</h2>
+        <button id="newScanBtn" class="btn btn-secondary btn-sm">New Scan</button>
+      </div>
+
+      <div class="results-summary" id="resultsSummary">
+        <!-- Summary will be inserted here -->
+      </div>
+
+      <div class="results-details" id="resultsDetails">
+        <!-- Detailed results will be inserted here -->
+      </div>
+
+      <div class="results-actions">
+        <button id="viewReportBtn" class="btn btn-primary">
+          View Full Report
+        </button>
+        <button id="downloadReportBtn" class="btn btn-secondary">
+          Download PDF
+        </button>
+      </div>
+    </section>
+
+    <!-- Error Section -->
+    <section class="scan-error hidden" id="scanError">
+      <div class="error-icon">⚠️</div>
+      <h3 class="error-title" id="errorTitle">Error</h3>
+      <p class="error-message" id="errorMessage"></p>
+      <button id="retryBtn" class="btn btn-primary">Try Again</button>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-links">
+        <a href="#" id="settingsLink">Settings</a>
+        <span class="divider">|</span>
+        <a href="#" id="helpLink">Help</a>
+      </div>
+      <div class="api-status" id="apiStatus">
+        <span class="status-dot offline"></span>
+        <span>API: Checking...</span>
+      </div>
+    </footer>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal hidden" id="settingsModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Settings</h3>
+        <button class="modal-close" id="closeSettingsBtn">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="apiUrl">Backend API URL</label>
+          <input 
+            type="url" 
+            id="apiUrl" 
+            class="form-input" 
+            placeholder="http://localhost:8000"
+          >
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input type="checkbox" id="enableNotifications" checked>
+            Enable notifications
+          </label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="saveSettingsBtn" class="btn btn-primary">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

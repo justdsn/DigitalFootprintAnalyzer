@@ -82,6 +82,9 @@ from app.models.schemas import (
     PlatformDorkResults,
     ScanOptionsResponse,
     DeepScanResponse,
+    # Deep Scan Analyze schemas (Browser Extension)
+    DeepScanAnalyzeRequest,
+    DeepScanAnalyzeResponse,
 )
 
 # Import services
@@ -2350,3 +2353,264 @@ async def deep_scan(request: LightScanRequest) -> DeepScanResponse:
             )
         }
     )
+
+
+# =============================================================================
+# DEEP SCAN ANALYZE ENDPOINT (Browser Extension Integration)
+# =============================================================================
+
+@router.post(
+    "/deep-scan/analyze",
+    response_model=DeepScanAnalyzeResponse,
+    summary="Analyze Deep Scan Results from Extension",
+    description="""
+    Process and analyze data collected by the browser extension during a deep scan.
+    
+    This endpoint:
+    1. Receives profile data extracted by content scripts
+    2. Analyzes PII exposure across platforms
+    3. Detects impersonation risks
+    4. Calculates overall risk score
+    5. Generates recommendations
+    6. Optionally creates a downloadable PDF report
+    
+    The extension sends:
+    - Scan metadata (ID, duration, platforms)
+    - Profile data for each platform
+    - Extracted PII from visible content
+    
+    Returns comprehensive analysis with risk assessment.
+    """
+)
+async def deep_scan_analyze(request: DeepScanAnalyzeRequest) -> DeepScanAnalyzeResponse:
+    """
+    Analyze deep scan results from browser extension.
+    
+    Args:
+        request: DeepScanAnalyzeRequest containing extension-collected data
+    
+    Returns:
+        DeepScanAnalyzeResponse: Comprehensive analysis results
+    
+    Example:
+        Input: {
+            "scan_id": "DS-ABC12345",
+            "identifier_type": "username",
+            "identifier_value": "john_doe",
+            "platforms_scanned": ["facebook", "instagram", "linkedin", "x"],
+            "results": {
+                "facebook": {
+                    "platform": "Facebook",
+                    "emoji": "📘",
+                    "status": "completed",
+                    "profiles": [...],
+                    "searchResults": [...]
+                },
+                ...
+            }
+        }
+    """
+    try:
+        import uuid
+        from datetime import datetime
+        
+        # Build user identifiers for analysis
+        user_identifiers = {
+            "type": request.identifier_type,
+            "value": request.identifier_value
+        }
+        
+        # Process results from extension
+        platform_summary = {}
+        all_profiles = []
+        all_pii = []
+        total_profiles = 0
+        
+        for platform_key, platform_data in request.results.items():
+            if not isinstance(platform_data, dict):
+                continue
+            
+            profiles = platform_data.get("profiles", [])
+            search_results = platform_data.get("searchResults", [])
+            combined = profiles + search_results
+            
+            platform_summary[platform_key] = {
+                "platform": platform_data.get("platform", platform_key),
+                "emoji": platform_data.get("emoji", "🔍"),
+                "status": platform_data.get("status", "unknown"),
+                "profiles_found": len(combined),
+                "errors": platform_data.get("errors", [])
+            }
+            
+            total_profiles += len(combined)
+            
+            # Extract PII from profiles
+            for profile in combined:
+                if isinstance(profile, dict):
+                    all_profiles.append(profile)
+                    
+                    # Collect extracted PII
+                    extracted = profile.get("extractedPII", {})
+                    if isinstance(extracted, dict):
+                        for pii_type, values in extracted.items():
+                            if isinstance(values, list):
+                                for value in values:
+                                    all_pii.append({
+                                        "type": pii_type,
+                                        "value": value,
+                                        "platform": platform_key,
+                                        "source": profile.get("profileUrl", "")
+                                    })
+                    
+                    # Also check direct PII fields
+                    if profile.get("email"):
+                        all_pii.append({
+                            "type": "email",
+                            "value": profile["email"],
+                            "platform": platform_key,
+                            "source": profile.get("profileUrl", "")
+                        })
+                    if profile.get("phone"):
+                        all_pii.append({
+                            "type": "phone",
+                            "value": profile["phone"],
+                            "platform": platform_key,
+                            "source": profile.get("profileUrl", "")
+                        })
+        
+        # Deduplicate PII
+        seen_pii = set()
+        unique_pii = []
+        for pii in all_pii:
+            key = (pii["type"], pii["value"])
+            if key not in seen_pii:
+                seen_pii.add(key)
+                unique_pii.append(pii)
+        
+        # Calculate risk score
+        risk_score = 10  # Base score
+        
+        # Add points for exposed PII
+        risk_score += min(len(unique_pii) * 10, 40)
+        
+        # Add points for number of profiles found
+        risk_score += min(total_profiles * 5, 30)
+        
+        # Add points for platforms with results
+        platforms_with_data = sum(
+            1 for p in platform_summary.values() 
+            if p.get("profiles_found", 0) > 0
+        )
+        risk_score += platforms_with_data * 5
+        
+        risk_score = min(risk_score, 100)
+        
+        # Determine risk level
+        if risk_score >= 70:
+            risk_level = "high"
+        elif risk_score >= 40:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+        
+        # Detect impersonation risks (simplified)
+        impersonation_risks = []
+        usernames = {}
+        for profile in all_profiles:
+            if isinstance(profile, dict):
+                username = profile.get("username")
+                platform = profile.get("platform") or profile.get("platformKey")
+                if username and platform:
+                    if username not in usernames:
+                        usernames[username] = []
+                    usernames[username].append(platform)
+        
+        # Flag usernames that appear on multiple platforms
+        for username, platforms in usernames.items():
+            if len(platforms) > 1:
+                impersonation_risks.append({
+                    "username": username,
+                    "platforms": platforms,
+                    "risk": "low",
+                    "reason": "Same username found on multiple platforms"
+                })
+        
+        # Generate recommendations
+        recommendations = [
+            "Review privacy settings on all identified social media profiles"
+        ]
+        
+        if len(unique_pii) > 0:
+            recommendations.append(
+                f"Found {len(unique_pii)} PII items exposed - review what information is publicly visible"
+            )
+        
+        if any(p.get("type") == "email" for p in unique_pii):
+            recommendations.append(
+                "Email addresses were found - check if they've been in data breaches at haveibeenpwned.com"
+            )
+        
+        if any(p.get("type") == "phone" for p in unique_pii):
+            recommendations.append(
+                "Phone numbers were found - consider removing them from public profiles"
+            )
+        
+        if risk_score >= 70:
+            recommendations.append(
+                "High exposure detected - enable two-factor authentication on all accounts"
+            )
+        
+        if total_profiles >= 5:
+            recommendations.append(
+                "Multiple profiles found - consider using unique usernames to reduce traceability"
+            )
+        
+        # Generate report ID for PDF if requested
+        report_id = None
+        pdf_url = None
+        if request.generate_pdf:
+            report_id = str(uuid.uuid4())[:12].upper()
+            
+            # Store report data for later PDF generation
+            report_data = {
+                "report_id": report_id,
+                "scan_id": request.scan_id,
+                "identifier": user_identifiers,
+                "platforms_analyzed": len(platform_summary),
+                "total_profiles_found": total_profiles,
+                "total_pii_exposed": len(unique_pii),
+                "risk_score": risk_score,
+                "risk_level": risk_level,
+                "exposed_pii": unique_pii,
+                "platform_summary": platform_summary,
+                "recommendations": recommendations,
+                "generated_at": datetime.utcnow().isoformat()
+            }
+            
+            _store_report(report_id, report_data)
+            pdf_url = f"/api/report/{report_id}/pdf"
+        
+        return DeepScanAnalyzeResponse(
+            success=True,
+            scan_id=request.scan_id,
+            report_id=report_id,
+            analysis_timestamp=datetime.utcnow().isoformat() + "Z",
+            identifier=user_identifiers,
+            platforms_analyzed=len(platform_summary),
+            total_profiles_found=total_profiles,
+            total_pii_exposed=len(unique_pii),
+            risk_score=risk_score,
+            risk_level=risk_level,
+            exposed_pii=unique_pii,
+            platform_summary=platform_summary,
+            impersonation_risks=impersonation_risks,
+            recommendations=recommendations,
+            pdf_url=pdf_url
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in deep_scan_analyze endpoint: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during deep scan analysis: {str(e)}"
+        )
