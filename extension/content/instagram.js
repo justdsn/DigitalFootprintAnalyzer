@@ -46,11 +46,25 @@
       resultLinks.forEach((link, index) => {
         try {
           const href = link.href;
+          if (!href) return;
           
-          // Only process profile links
-          if (!href || !href.includes('instagram.com/') || 
-              href.includes('/p/') || href.includes('/explore/') ||
-              href.includes('/reel/')) {
+          let parsedUrl;
+          try {
+            parsedUrl = new URL(href);
+          } catch {
+            return; // Invalid URL
+          }
+          
+          const hostname = parsedUrl.hostname.toLowerCase();
+          const pathname = parsedUrl.pathname;
+          
+          // Verify it's Instagram and not a non-profile page
+          if (!(hostname === 'instagram.com' || hostname.endsWith('.instagram.com'))) {
+            return;
+          }
+          
+          if (pathname.includes('/p/') || pathname.includes('/explore/') ||
+              pathname.includes('/reel/')) {
             return;
           }
           
@@ -66,10 +80,10 @@
             extractedPII: {}
           };
           
-          // Extract username from URL
-          const urlMatch = href.match(/instagram\.com\/([a-zA-Z0-9._]+)/);
-          if (urlMatch) {
-            profile.username = urlMatch[1];
+          // Extract username from pathname
+          const usernameMatch = pathname.match(/^\/([a-zA-Z0-9._]+)/);
+          if (usernameMatch) {
+            profile.username = usernameMatch[1];
           }
           
           // Extract name and username from text content

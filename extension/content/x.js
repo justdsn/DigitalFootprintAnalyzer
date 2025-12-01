@@ -62,28 +62,46 @@
             extractedPII: {}
           };
           
+          // Reserved paths that are not user profiles
+          const reservedPaths = ['search', 'explore', 'home', 'notifications', 'messages', 'settings', 'i'];
+          
           // Extract profile link and username
           const links = item.querySelectorAll(SELECTORS.searchResultLink);
           for (const link of links) {
             const href = link.href;
-            if (href && (href.includes('x.com/') || href.includes('twitter.com/')) &&
-                !href.includes('/status/') && !href.includes('/search')) {
-              profile.profileUrl = href;
+            if (!href) continue;
+            
+            try {
+              const parsedUrl = new URL(href);
+              const hostname = parsedUrl.hostname.toLowerCase();
+              const pathname = parsedUrl.pathname;
               
-              // Extract username from URL
-              const urlMatch = href.match(/(?:x\.com|twitter\.com)\/([a-zA-Z0-9_]+)/);
-              if (urlMatch && !['search', 'explore', 'home', 'notifications', 'messages'].includes(urlMatch[1])) {
-                profile.username = urlMatch[1];
-                break;
+              // Verify it's X/Twitter domain
+              const isXDomain = hostname === 'x.com' || hostname.endsWith('.x.com');
+              const isTwitterDomain = hostname === 'twitter.com' || hostname.endsWith('.twitter.com');
+              
+              if ((isXDomain || isTwitterDomain) &&
+                  !pathname.includes('/status/') && !pathname.includes('/search')) {
+                profile.profileUrl = href;
+                
+                // Extract username from pathname
+                const usernameMatch = pathname.match(/^\/([a-zA-Z0-9_]+)/);
+                if (usernameMatch && !reservedPaths.includes(usernameMatch[1])) {
+                  profile.username = usernameMatch[1];
+                  break;
+                }
               }
+            } catch {
+              // Invalid URL, skip
+              continue;
             }
           }
           
           // Extract name and username from text
           const textContent = item.textContent || '';
-          const usernameMatch = textContent.match(/@([a-zA-Z0-9_]+)/);
-          if (usernameMatch) {
-            profile.username = profile.username || usernameMatch[1];
+          const textUsernameMatch = textContent.match(/@([a-zA-Z0-9_]+)/);
+          if (textUsernameMatch) {
+            profile.username = profile.username || textUsernameMatch[1];
           }
           
           // Try to get display name

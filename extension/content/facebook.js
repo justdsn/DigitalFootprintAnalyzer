@@ -70,25 +70,37 @@
           const linkElements = item.querySelectorAll('a[role="link"]');
           for (const link of linkElements) {
             const href = link.href;
-            if (href && href.includes('facebook.com/') && 
-                !href.includes('/search') && 
-                !href.includes('/groups') &&
-                !href.includes('/pages')) {
-              profile.profileUrl = href;
+            if (!href) continue;
+            
+            try {
+              const parsedUrl = new URL(href);
+              const hostname = parsedUrl.hostname.toLowerCase();
+              const pathname = parsedUrl.pathname;
               
-              // Extract username from URL
-              const urlMatch = href.match(/facebook\.com\/([a-zA-Z0-9.]+)/);
-              if (urlMatch) {
-                profile.username = urlMatch[1];
+              // Verify it's a Facebook domain and a profile URL
+              if ((hostname === 'facebook.com' || hostname.endsWith('.facebook.com')) && 
+                  !pathname.includes('/search') && 
+                  !pathname.includes('/groups') &&
+                  !pathname.includes('/pages')) {
+                profile.profileUrl = href;
+                
+                // Extract username from pathname
+                const usernameMatch = pathname.match(/^\/([a-zA-Z0-9.]+)/);
+                if (usernameMatch) {
+                  profile.username = usernameMatch[1];
+                }
+                
+                // Try to get name from link text
+                const nameSpan = link.querySelector('span');
+                if (nameSpan && nameSpan.textContent) {
+                  profile.name = nameSpan.textContent.trim();
+                }
+                
+                break;
               }
-              
-              // Try to get name from link text
-              const nameSpan = link.querySelector('span');
-              if (nameSpan && nameSpan.textContent) {
-                profile.name = nameSpan.textContent.trim();
-              }
-              
-              break;
+            } catch {
+              // Invalid URL, skip
+              continue;
             }
           }
           

@@ -16,6 +16,11 @@ const PLATFORMS = {
   x: { name: 'X (Twitter)', emoji: '𝕏' }
 };
 
+// Configuration URLs
+const HELP_URL = 'https://github.com/justdsn/DigitalFootprintAnalyzer#readme';
+const DEFAULT_API_PORT = 8000;
+const DEFAULT_FRONTEND_PORT = 3000;
+
 // =============================================================================
 // DOM ELEMENTS
 // =============================================================================
@@ -123,7 +128,7 @@ function setupEventListeners() {
   // Help link
   elements.helpLink.addEventListener('click', (e) => {
     e.preventDefault();
-    chrome.tabs.create({ url: 'https://github.com/justdsn/DigitalFootprintAnalyzer#readme' });
+    chrome.tabs.create({ url: HELP_URL });
   });
   
   // Listen for messages from background
@@ -487,13 +492,29 @@ async function checkApiStatus() {
 // REPORT FUNCTIONS
 // =============================================================================
 
+/**
+ * Construct frontend URL from API URL
+ * @param {string} apiUrl - The API URL
+ * @returns {string} The frontend URL
+ */
+function getFrontendUrl(apiUrl) {
+  try {
+    const url = new URL(apiUrl);
+    url.port = DEFAULT_FRONTEND_PORT.toString();
+    return url.toString().replace(/\/$/, '');
+  } catch {
+    // Fallback for invalid URLs
+    return `http://localhost:${DEFAULT_FRONTEND_PORT}`;
+  }
+}
+
 function viewFullReport() {
   if (!lastResults || !currentScan) return;
   
   // Open the web app with results
   chrome.storage.local.get(['apiUrl'], (settings) => {
-    const baseUrl = settings.apiUrl || 'http://localhost:8000';
-    const webAppUrl = baseUrl.replace(':8000', ':3000'); // Assume frontend is on 3000
+    const baseUrl = settings.apiUrl || `http://localhost:${DEFAULT_API_PORT}`;
+    const webAppUrl = getFrontendUrl(baseUrl);
     
     chrome.tabs.create({
       url: `${webAppUrl}/results?scan=${encodeURIComponent(JSON.stringify({
@@ -523,11 +544,13 @@ async function downloadReport() {
     if (response.report_id) {
       // Open PDF download link
       const settings = await chrome.storage.local.get(['apiUrl']);
-      const apiUrl = settings.apiUrl || 'http://localhost:8000';
+      const apiUrl = settings.apiUrl || `http://localhost:${DEFAULT_API_PORT}`;
       chrome.tabs.create({ url: `${apiUrl}/api/report/${response.report_id}/pdf` });
+    } else {
+      showError('Report Generation Failed', 'Could not generate report. Please try again.');
     }
   } catch (error) {
     console.error('Error downloading report:', error);
-    alert('Failed to generate report. Please try again.');
+    showError('Report Download Failed', error.message || 'Failed to generate report. Please try again.');
   }
 }

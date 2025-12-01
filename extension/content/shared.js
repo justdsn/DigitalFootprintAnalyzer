@@ -82,14 +82,22 @@ function extractProfileFromElement(element, selectors) {
       profile.phone = phoneMatch[0];
     }
     
-    // Extract URLs
+    // Extract URLs - filter out social media platform URLs
     const urlMatch = text.match(/https?:\/\/[^\s]+/g);
     if (urlMatch && urlMatch.length > 0) {
-      profile.website = urlMatch.find(url => !url.includes('facebook.com') && 
-                                              !url.includes('instagram.com') && 
-                                              !url.includes('linkedin.com') && 
-                                              !url.includes('x.com') && 
-                                              !url.includes('twitter.com'));
+      const socialDomains = ['facebook.com', 'instagram.com', 'linkedin.com', 'x.com', 'twitter.com'];
+      profile.website = urlMatch.find(urlStr => {
+        try {
+          const parsedUrl = new URL(urlStr);
+          const hostname = parsedUrl.hostname.toLowerCase();
+          // Check if URL is NOT from a social media platform
+          return !socialDomains.some(domain => 
+            hostname === domain || hostname.endsWith('.' + domain)
+          );
+        } catch {
+          return false; // Invalid URL
+        }
+      });
     }
     
   } catch (error) {
@@ -224,16 +232,29 @@ function extractPII(text) {
 }
 
 /**
+ * Check if hostname matches a platform domain
+ * Uses exact domain matching to prevent subdomain spoofing
+ * @param {string} hostname - Hostname to check
+ * @param {string} domain - Domain to match against
+ * @returns {boolean}
+ */
+function isValidPlatformDomain(hostname, domain) {
+  // Exact match or subdomain match
+  return hostname === domain || hostname.endsWith('.' + domain);
+}
+
+/**
  * Determine current platform from URL
+ * Uses proper hostname validation to prevent spoofing
  * @returns {string|null} Platform name or null
  */
 function getCurrentPlatform() {
-  const hostname = window.location.hostname;
+  const hostname = window.location.hostname.toLowerCase();
   
-  if (hostname.includes('facebook.com')) return 'facebook';
-  if (hostname.includes('instagram.com')) return 'instagram';
-  if (hostname.includes('linkedin.com')) return 'linkedin';
-  if (hostname.includes('x.com') || hostname.includes('twitter.com')) return 'x';
+  if (isValidPlatformDomain(hostname, 'facebook.com')) return 'facebook';
+  if (isValidPlatformDomain(hostname, 'instagram.com')) return 'instagram';
+  if (isValidPlatformDomain(hostname, 'linkedin.com')) return 'linkedin';
+  if (isValidPlatformDomain(hostname, 'x.com') || isValidPlatformDomain(hostname, 'twitter.com')) return 'x';
   
   return null;
 }
@@ -243,8 +264,9 @@ function getCurrentPlatform() {
  * @returns {boolean}
  */
 function isSearchPage() {
-  const url = window.location.href;
-  return url.includes('/search') || url.includes('?q=');
+  const pathname = window.location.pathname;
+  const search = window.location.search;
+  return pathname.includes('/search') || search.includes('q=');
 }
 
 /**

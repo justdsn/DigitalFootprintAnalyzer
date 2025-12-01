@@ -217,7 +217,18 @@ async function scanPlatform(platform, identifier, identifierType) {
   
   // Send message to content script if a tab with this platform is already open
   try {
-    const tabs = await chrome.tabs.query({ url: `*://*.${platform === 'x' ? 'x' : platform}.com/*` });
+    // Build URL patterns for tab query - X platform needs both x.com and twitter.com
+    let urlPatterns;
+    if (platform === 'x') {
+      urlPatterns = ['*://*.x.com/*', '*://*.twitter.com/*'];
+    } else {
+      urlPatterns = [`*://*.${platform}.com/*`];
+    }
+    
+    // Query tabs for all matching patterns
+    const tabPromises = urlPatterns.map(pattern => chrome.tabs.query({ url: pattern }));
+    const tabResults = await Promise.all(tabPromises);
+    const tabs = tabResults.flat();
     
     if (tabs.length > 0) {
       // Use existing tab
