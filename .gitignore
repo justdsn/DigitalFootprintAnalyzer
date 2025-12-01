@@ -164,3 +164,11 @@ docker-compose.override.yml
 .sass-cache/
 *.css.map
 *.scss.map
+
+# -----------------------------------------------------------------------------
+# Chrome Extension
+# -----------------------------------------------------------------------------
+# Extension build artifacts
+extension/*.zip
+extension/*.crx
+extension/*.pem

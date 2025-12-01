@@ -1,0 +1,422 @@
+// =============================================================================
+// BACKGROUND SERVICE WORKER
+// =============================================================================
+// Orchestrates deep scan operations across multiple social media platforms.
+// Handles communication between content scripts, popup, and backend API.
+// =============================================================================
+
+import { sendToBackend, getApiUrl } from '../lib/api.js';
+
+// =============================================================================
+// CONSTANTS
+// =============================================================================
+
+const SUPPORTED_PLATFORMS = {
+  facebook: {
+    name: 'Facebook',
+    emoji: '📘',
+    searchUrlPattern: 'https://www.facebook.com/search/people/?q=',
+    profileUrlPattern: /facebook\.com\/(?!search|login|help|groups|pages|marketplace|watch|gaming|events)([a-zA-Z0-9.]+)/
+  },
+  instagram: {
+    name: 'Instagram',
+    emoji: '📷',
+    searchUrlPattern: 'https://www.instagram.com/',
+    profileUrlPattern: /instagram\.com\/([a-zA-Z0-9._]+)/
+  },
+  linkedin: {
+    name: 'LinkedIn',
+    emoji: '💼',
+    searchUrlPattern: 'https://www.linkedin.com/search/results/people/?keywords=',
+    profileUrlPattern: /linkedin\.com\/in\/([a-zA-Z0-9-]+)/
+  },
+  x: {
+    name: 'X (Twitter)',
+    emoji: '𝕏',
+    searchUrlPattern: 'https://x.com/search?q=',
+    profileUrlPattern: /(?:x\.com|twitter\.com)\/([a-zA-Z0-9_]+)/
+  }
+};
+
+// Scan state management
+let currentScan = null;
+let scanResults = {};
+
+// =============================================================================
+// MESSAGE HANDLERS
+// =============================================================================
+
+/**
+ * Handle messages from content scripts and popup
+ */
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Use async wrapper for proper response handling
+  handleMessage(message, sender).then(sendResponse).catch(error => {
+    console.error('Error handling message:', error);
+    sendResponse({ success: false, error: error.message });
+  });
+  
+  // Return true to indicate async response
+  return true;
+});
+
+/**
+ * Async message handler
+ */
+async function handleMessage(message, sender) {
+  switch (message.action) {
+    case 'startDeepScan':
+      return await startDeepScan(message.data);
+    
+    case 'getScanStatus':
+      return getScanStatus();
+    
+    case 'cancelScan':
+      return cancelScan();
+    
+    case 'profileDataExtracted':
+      return handleProfileData(message.data, sender);
+    
+    case 'searchResultsExtracted':
+      return handleSearchResults(message.data, sender);
+    
+    case 'getApiUrl':
+      return { success: true, url: await getApiUrl() };
+    
+    case 'sendToBackend':
+      return await sendToBackend(message.endpoint, message.data);
+    
+    default:
+      return { success: false, error: 'Unknown action' };
+  }
+}
+
+// =============================================================================
+// DEEP SCAN ORCHESTRATION
+// =============================================================================
+
+/**
+ * Start a deep scan for the given identifier
+ * @param {Object} data - Scan parameters
+ * @param {string} data.identifierType - Type of identifier (name, email, username)
+ * @param {string} data.identifierValue - The identifier value to search
+ * @param {string[]} data.platforms - Platforms to scan
+ * @returns {Object} Scan initiation result
+ */
+async function startDeepScan(data) {
+  const { identifierType, identifierValue, platforms } = data;
+  
+  if (!identifierValue) {
+    return { success: false, error: 'Identifier value is required' };
+  }
+  
+  if (currentScan && currentScan.status === 'in_progress') {
+    return { success: false, error: 'A scan is already in progress' };
+  }
+  
+  // Initialize scan state
+  currentScan = {
+    id: generateScanId(),
+    identifierType: identifierType || 'username',
+    identifierValue,
+    platforms: platforms || Object.keys(SUPPORTED_PLATFORMS),
+    status: 'in_progress',
+    startTime: Date.now(),
+    progress: 0,
+    currentPlatform: null,
+    completedPlatforms: [],
+    results: {}
+  };
+  
+  scanResults = {};
+  
+  // Notify popup of scan start
+  notifyPopup('scanStarted', { scanId: currentScan.id });
+  
+  // Start scanning each platform
+  for (const platform of currentScan.platforms) {
+    if (currentScan.status !== 'in_progress') {
+      break; // Scan was cancelled
+    }
+    
+    currentScan.currentPlatform = platform;
+    await scanPlatform(platform, identifierValue, identifierType);
+    currentScan.completedPlatforms.push(platform);
+    currentScan.progress = (currentScan.completedPlatforms.length / currentScan.platforms.length) * 100;
+    
+    // Notify popup of progress
+    notifyPopup('scanProgress', {
+      platform,
+      progress: currentScan.progress,
+      completedPlatforms: currentScan.completedPlatforms
+    });
+  }
+  
+  // Finalize scan
+  if (currentScan.status === 'in_progress') {
+    currentScan.status = 'completed';
+    currentScan.endTime = Date.now();
+    currentScan.results = scanResults;
+    
+    // Send results to backend
+    try {
+      const backendResponse = await sendToBackend('/api/deep-scan/analyze', {
+        scan_id: currentScan.id,
+        identifier_type: currentScan.identifierType,
+        identifier_value: currentScan.identifierValue,
+        platforms_scanned: currentScan.completedPlatforms,
+        results: scanResults,
+        scan_duration_ms: currentScan.endTime - currentScan.startTime
+      });
+      
+      currentScan.backendAnalysis = backendResponse;
+    } catch (error) {
+      console.error('Failed to send results to backend:', error);
+      currentScan.backendError = error.message;
+    }
+    
+    // Notify popup of completion
+    notifyPopup('scanCompleted', {
+      scanId: currentScan.id,
+      results: currentScan.results,
+      analysis: currentScan.backendAnalysis
+    });
+  }
+  
+  return { success: true, scanId: currentScan.id };
+}
+
+/**
+ * Scan a specific platform for the identifier
+ * @param {string} platform - Platform key
+ * @param {string} identifier - Value to search
+ * @param {string} identifierType - Type of identifier
+ */
+async function scanPlatform(platform, identifier, identifierType) {
+  const platformConfig = SUPPORTED_PLATFORMS[platform];
+  if (!platformConfig) return;
+  
+  // Build search query based on identifier type
+  let searchQuery = identifier;
+  if (identifierType === 'name') {
+    searchQuery = encodeURIComponent(identifier);
+  } else if (identifierType === 'email') {
+    // Extract username part of email for searching
+    searchQuery = identifier.split('@')[0];
+  }
+  
+  // Initialize platform results
+  scanResults[platform] = {
+    platform: platformConfig.name,
+    emoji: platformConfig.emoji,
+    status: 'scanning',
+    profiles: [],
+    searchResults: [],
+    errors: []
+  };
+  
+  // Send message to content script if a tab with this platform is already open
+  try {
+    // Build URL patterns for tab query - X platform needs both x.com and twitter.com
+    let urlPatterns;
+    if (platform === 'x') {
+      urlPatterns = ['*://*.x.com/*', '*://*.twitter.com/*'];
+    } else {
+      urlPatterns = [`*://*.${platform}.com/*`];
+    }
+    
+    // Query tabs for all matching patterns
+    const tabPromises = urlPatterns.map(pattern => chrome.tabs.query({ url: pattern }));
+    const tabResults = await Promise.all(tabPromises);
+    const tabs = tabResults.flat();
+    
+    if (tabs.length > 0) {
+      // Use existing tab
+      await chrome.tabs.sendMessage(tabs[0].id, {
+        action: 'extractSearchResults',
+        query: identifier,
+        identifierType
+      });
+    }
+    
+    // Wait for results with timeout
+    await waitForPlatformResults(platform, 10000);
+    
+  } catch (error) {
+    scanResults[platform].status = 'error';
+    scanResults[platform].errors.push(error.message);
+  }
+  
+  // Mark as completed if still scanning
+  if (scanResults[platform].status === 'scanning') {
+    scanResults[platform].status = 'completed';
+  }
+}
+
+/**
+ * Wait for platform results with timeout
+ */
+function waitForPlatformResults(platform, timeout) {
+  return new Promise((resolve) => {
+    const startTime = Date.now();
+    
+    const checkResults = () => {
+      if (scanResults[platform]?.status !== 'scanning') {
+        resolve();
+        return;
+      }
+      
+      if (Date.now() - startTime > timeout) {
+        scanResults[platform].status = 'timeout';
+        resolve();
+        return;
+      }
+      
+      setTimeout(checkResults, 500);
+    };
+    
+    checkResults();
+  });
+}
+
+/**
+ * Handle extracted profile data from content scripts
+ */
+function handleProfileData(data, sender) {
+  const { platform, profile } = data;
+  
+  if (!scanResults[platform]) {
+    scanResults[platform] = {
+      platform: SUPPORTED_PLATFORMS[platform]?.name || platform,
+      emoji: SUPPORTED_PLATFORMS[platform]?.emoji || '🔍',
+      status: 'completed',
+      profiles: [],
+      searchResults: [],
+      errors: []
+    };
+  }
+  
+  scanResults[platform].profiles.push(profile);
+  scanResults[platform].status = 'completed';
+  
+  return { success: true };
+}
+
+/**
+ * Handle extracted search results from content scripts
+ */
+function handleSearchResults(data, sender) {
+  const { platform, results } = data;
+  
+  if (!scanResults[platform]) {
+    scanResults[platform] = {
+      platform: SUPPORTED_PLATFORMS[platform]?.name || platform,
+      emoji: SUPPORTED_PLATFORMS[platform]?.emoji || '🔍',
+      status: 'completed',
+      profiles: [],
+      searchResults: [],
+      errors: []
+    };
+  }
+  
+  scanResults[platform].searchResults = results;
+  scanResults[platform].status = 'completed';
+  
+  return { success: true };
+}
+
+// =============================================================================
+// SCAN STATUS & CONTROL
+// =============================================================================
+
+/**
+ * Get current scan status
+ */
+function getScanStatus() {
+  if (!currentScan) {
+    return { success: true, status: 'idle', scan: null };
+  }
+  
+  return {
+    success: true,
+    status: currentScan.status,
+    scan: {
+      id: currentScan.id,
+      identifierType: currentScan.identifierType,
+      identifierValue: currentScan.identifierValue,
+      platforms: currentScan.platforms,
+      progress: currentScan.progress,
+      currentPlatform: currentScan.currentPlatform,
+      completedPlatforms: currentScan.completedPlatforms,
+      results: currentScan.status === 'completed' ? currentScan.results : null,
+      analysis: currentScan.backendAnalysis
+    }
+  };
+}
+
+/**
+ * Cancel the current scan
+ */
+function cancelScan() {
+  if (!currentScan || currentScan.status !== 'in_progress') {
+    return { success: false, error: 'No scan in progress' };
+  }
+  
+  currentScan.status = 'cancelled';
+  currentScan.endTime = Date.now();
+  
+  notifyPopup('scanCancelled', { scanId: currentScan.id });
+  
+  return { success: true };
+}
+
+// =============================================================================
+// UTILITY FUNCTIONS
+// =============================================================================
+
+/**
+ * Generate a unique scan ID
+ */
+function generateScanId() {
+  return 'DS-' + Date.now().toString(36).toUpperCase() + Math.random().toString(36).substring(2, 7).toUpperCase();
+}
+
+/**
+ * Send notification to popup
+ */
+function notifyPopup(event, data) {
+  chrome.runtime.sendMessage({ event, data }).catch(() => {
+    // Popup might be closed, ignore error
+  });
+}
+
+// =============================================================================
+// EXTENSION LIFECYCLE
+// =============================================================================
+
+/**
+ * Handle extension installation/update
+ */
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    console.log('Digital Footprint Analyzer extension installed');
+    // Set default settings
+    chrome.storage.local.set({
+      apiUrl: 'http://localhost:8000',
+      enableNotifications: true
+    });
+  } else if (details.reason === 'update') {
+    console.log('Digital Footprint Analyzer extension updated to version', chrome.runtime.getManifest().version);
+  }
+});
+
+/**
+ * Keep service worker alive during scans
+ */
+chrome.alarms.create('keepAlive', { periodInMinutes: 0.5 });
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'keepAlive' && currentScan?.status === 'in_progress') {
+    console.log('Keeping service worker alive during scan');
+  }
+});
