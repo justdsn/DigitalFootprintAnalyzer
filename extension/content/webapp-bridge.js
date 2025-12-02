@@ -91,14 +91,24 @@ window.addEventListener('message', async (event) => {
 
 // Listen for messages from background (scan progress updates)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Handle direct events
   if (message.event) {
-    // Forward progress/completion events to web app (same origin)
     window.postMessage({
       source: 'dfa-extension',
       event: message.event,
       data: message.data
     }, window.location.origin);
   }
+  
+  // Handle webappEvent wrapper
+  if (message.action === 'webappEvent') {
+    window.postMessage({
+      source: 'dfa-extension',
+      event: message.event,
+      data: message.data
+    }, window.location.origin);
+  }
+  
   return false;
 });
 
