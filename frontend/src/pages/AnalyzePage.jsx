@@ -22,7 +22,7 @@ function AnalyzePage() {
   const [scanProgress, setScanProgress] = useState(0);
   const [currentPlatform, setCurrentPlatform] = useState(null);
   const [completedPlatforms, setCompletedPlatforms] = useState([]);
-  const [scanPlatforms, setScanPlatforms] = useState(['facebook', 'instagram', 'linkedin', 'x']);
+  const [scanPlatforms] = useState(['facebook', 'instagram', 'linkedin', 'x']);
 
   useEffect(() => {
     // Check for extension on mount
