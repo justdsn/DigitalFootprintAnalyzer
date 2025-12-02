@@ -8,8 +8,13 @@ console.log('[DFA Extension] Web app bridge loaded');
 
 // Listen for messages from web app (page script)
 window.addEventListener('message', async (event) => {
-  // Only accept messages from same origin
+  // Only accept messages from same window and localhost origin
   if (event.source !== window) return;
+  
+  // Verify origin is localhost (security check)
+  const isLocalhost = event.origin === window.location.origin || 
+                     event.origin.startsWith('http://localhost:');
+  if (!isLocalhost) return;
   
   const message = event.data;
   
@@ -60,18 +65,18 @@ window.addEventListener('message', async (event) => {
         };
     }
     
-    // Send response back to web app
+    // Send response back to web app (same origin)
     window.postMessage({
       source: 'dfa-extension',
       requestId: message.requestId,
       action: message.action,
       response: response
-    }, '*');
+    }, window.location.origin);
     
   } catch (error) {
     console.error('[DFA Extension] Error handling message:', error);
     
-    // Send error response
+    // Send error response (same origin)
     window.postMessage({
       source: 'dfa-extension',
       requestId: message.requestId,
@@ -80,24 +85,24 @@ window.addEventListener('message', async (event) => {
         success: false,
         error: error.message
       }
-    }, '*');
+    }, window.location.origin);
   }
 });
 
 // Listen for messages from background (scan progress updates)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.event) {
-    // Forward progress/completion events to web app
+    // Forward progress/completion events to web app (same origin)
     window.postMessage({
       source: 'dfa-extension',
       event: message.event,
       data: message.data
-    }, '*');
+    }, window.location.origin);
   }
   return false;
 });
 
-// Notify web app that extension is ready
+// Notify web app that extension is ready (same origin)
 window.postMessage({
   source: 'dfa-extension',
   event: 'extensionReady',
@@ -105,4 +110,4 @@ window.postMessage({
     version: chrome.runtime.getManifest().version,
     extensionId: chrome.runtime.id
   }
-}, '*');
+}, window.location.origin);

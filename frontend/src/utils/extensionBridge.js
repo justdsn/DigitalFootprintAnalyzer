@@ -16,13 +16,13 @@ function sendMessageToExtension(action, data = null) {
     // Store resolver
     pendingRequests.set(requestId, { resolve, reject });
     
-    // Send message via postMessage
+    // Send message via postMessage to same origin
     window.postMessage({
       source: 'dfa-webapp',
       requestId,
       action,
       data
-    }, '*');
+    }, window.location.origin);
     
     // Timeout after 30 seconds
     setTimeout(() => {
@@ -38,7 +38,13 @@ function sendMessageToExtension(action, data = null) {
  * Listen for responses from extension
  */
 window.addEventListener('message', (event) => {
+  // Only accept messages from same window and origin
   if (event.source !== window) return;
+  
+  // Verify origin is localhost (security check)
+  const isLocalhost = event.origin === window.location.origin || 
+                     event.origin.startsWith('http://localhost:');
+  if (!isLocalhost) return;
   
   const message = event.data;
   if (!message || message.source !== 'dfa-extension') return;
