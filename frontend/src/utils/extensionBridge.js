@@ -24,13 +24,13 @@ function sendMessageToExtension(action, data = null) {
       data
     }, window.location.origin);
     
-    // Timeout after 30 seconds
+    // Timeout after 3 minutes (for long scans)
     setTimeout(() => {
       if (pendingRequests.has(requestId)) {
         pendingRequests.delete(requestId);
         reject(new Error('Extension request timeout'));
       }
-    }, 30000);
+    }, 180000);
   });
 }
 
