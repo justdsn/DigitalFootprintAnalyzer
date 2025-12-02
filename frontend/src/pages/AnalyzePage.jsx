@@ -27,11 +27,21 @@ function AnalyzePage() {
     setExtensionReady(isInstalled);
   };
 
-  const handleConnectExtension = () => {
+  const handleConnectExtension = async () => {
     if (extensionIdInput.trim()) {
-      setExtensionId(extensionIdInput.trim());
-      setExtensionReady(true);
-      setShowExtensionSetup(false);
+      try {
+        setExtensionId(extensionIdInput.trim());
+        // Verify the connection
+        const isInstalled = await detectExtension();
+        setExtensionReady(isInstalled);
+        if (isInstalled) {
+          setShowExtensionSetup(false);
+        } else {
+          setError('Failed to connect to extension. Please verify the Extension ID is correct.');
+        }
+      } catch (err) {
+        setError(err.message);
+      }
     }
   };
 

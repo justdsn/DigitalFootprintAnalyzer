@@ -2,6 +2,8 @@
  * Extension Bridge - Handles communication between web app and Chrome extension
  */
 
+/* global chrome */
+
 // Extension ID (will be set after extension is loaded)
 let EXTENSION_ID = null;
 
@@ -14,10 +16,17 @@ export async function detectExtension() {
   const storedId = localStorage.getItem('dfa_extension_id');
   
   if (storedId) {
-    const isInstalled = await checkExtensionById(storedId);
-    if (isInstalled) {
-      EXTENSION_ID = storedId;
-      return true;
+    // Validate stored ID format
+    const trimmedId = storedId.trim();
+    if (trimmedId.length === 32 && /^[a-z]{32}$/.test(trimmedId)) {
+      const isInstalled = await checkExtensionById(trimmedId);
+      if (isInstalled) {
+        EXTENSION_ID = trimmedId;
+        return true;
+      }
+    } else {
+      // Invalid format, clear from storage
+      localStorage.removeItem('dfa_extension_id');
     }
   }
   
@@ -44,8 +53,18 @@ async function checkExtensionById(extensionId) {
  * Set the extension ID manually (user provides after installation)
  */
 export function setExtensionId(id) {
-  EXTENSION_ID = id;
-  localStorage.setItem('dfa_extension_id', id);
+  // Validate extension ID format (32 characters, alphanumeric)
+  if (!id || typeof id !== 'string') {
+    throw new Error('Invalid extension ID: must be a non-empty string');
+  }
+  
+  const trimmedId = id.trim();
+  if (trimmedId.length !== 32 || !/^[a-z]{32}$/.test(trimmedId)) {
+    console.warn('Extension ID format may be incorrect. Expected 32 lowercase letters.');
+  }
+  
+  EXTENSION_ID = trimmedId;
+  localStorage.setItem('dfa_extension_id', trimmedId);
 }
 
 /**

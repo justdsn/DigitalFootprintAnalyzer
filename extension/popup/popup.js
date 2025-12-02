@@ -91,10 +91,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       const btn = document.getElementById('copyIdBtn');
       const originalText = btn.textContent;
       btn.textContent = '✓ Copied!';
-      btn.style.backgroundColor = '#22c55e';
+      btn.classList.add('copied');
       setTimeout(() => {
         btn.textContent = originalText;
-        btn.style.backgroundColor = '';
+        btn.classList.remove('copied');
       }, 2000);
     }).catch(err => {
       console.error('Failed to copy:', err);
