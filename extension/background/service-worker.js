@@ -61,6 +61,37 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 /**
+ * Handle messages from web app (external)
+ */
+chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
+  console.log('[Extension] Received message from web app:', message);
+  
+  if (message.action === 'checkExtension') {
+    // Web app checking if extension is installed
+    sendResponse({ 
+      installed: true, 
+      version: chrome.runtime.getManifest().version,
+      ready: true
+    });
+    return true;
+  }
+  
+  if (message.action === 'startDeepScan') {
+    // Web app requesting a deep scan
+    handleMessage(message, sender)
+      .then(result => {
+        sendResponse({ success: true, data: result });
+      })
+      .catch(error => {
+        sendResponse({ success: false, error: error.message });
+      });
+    return true; // Will respond asynchronously
+  }
+  
+  return false;
+});
+
+/**
  * Async message handler
  */
 async function handleMessage(message, sender) {

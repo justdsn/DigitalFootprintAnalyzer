@@ -81,6 +81,27 @@ let lastResults = null;
 // =============================================================================
 
 document.addEventListener('DOMContentLoaded', async () => {
+  // Display extension ID
+  const extensionId = chrome.runtime.id;
+  document.getElementById('extensionId').textContent = extensionId;
+  
+  // Copy extension ID button
+  document.getElementById('copyIdBtn').addEventListener('click', () => {
+    navigator.clipboard.writeText(extensionId).then(() => {
+      const btn = document.getElementById('copyIdBtn');
+      const originalText = btn.textContent;
+      btn.textContent = '✓ Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => {
+        btn.textContent = originalText;
+        btn.classList.remove('copied');
+      }, 2000);
+    }).catch(err => {
+      console.error('Failed to copy:', err);
+      alert('Failed to copy. Please select and copy manually.');
+    });
+  });
+  
   // Load settings
   await loadSettings();
   
