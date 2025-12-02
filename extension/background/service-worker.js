@@ -48,9 +48,16 @@ let keepAliveInterval;
 function startKeepAlive() {
   if (keepAliveInterval) return; // Already running
   keepAliveInterval = setInterval(() => {
-    chrome.runtime.getPlatformInfo(() => {
-      // This keeps the service worker alive
-    });
+    try {
+      chrome.runtime.getPlatformInfo(() => {
+        // This keeps the service worker alive
+        if (chrome.runtime.lastError) {
+          console.error('Keep-alive error:', chrome.runtime.lastError);
+        }
+      });
+    } catch (error) {
+      console.error('Keep-alive exception:', error);
+    }
   }, 20000); // Every 20 seconds
 }
 

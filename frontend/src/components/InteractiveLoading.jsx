@@ -7,6 +7,8 @@
 
 import React, { useState, useEffect } from 'react';
 
+const ESTIMATED_SECONDS_PER_PLATFORM = 30; // Rough estimate for time calculation
+
 const TIPS = [
   "💡 Deep scans check multiple social media platforms simultaneously",
   "🔒 All data is processed locally and never stored permanently",
@@ -53,7 +55,7 @@ function InteractiveLoading({
   }, [startTime]);
 
   // Calculate estimated time remaining
-  const estimatedTotal = platforms.length * 30; // Rough estimate: 30 seconds per platform
+  const estimatedTotal = platforms.length * ESTIMATED_SECONDS_PER_PLATFORM;
   const estimatedRemaining = Math.max(0, estimatedTotal - elapsedTime);
 
   // Format time as mm:ss
