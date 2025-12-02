@@ -5,7 +5,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { analyze } from '../services/api';
-import { detectExtension, startDeepScanViaExtension, onExtensionEvent } from '../utils/extensionBridge';
+import { detectExtension, startDeepScanViaExtension, onExtensionEvent, cancelScan } from '../utils/extensionBridge';
+import InteractiveLoading from '../components/InteractiveLoading';
 
 function AnalyzePage() {
   const navigate = useNavigate();
@@ -15,6 +16,13 @@ function AnalyzePage() {
   const [extensionReady, setExtensionReady] = useState(false);
   const [showExtensionSetup, setShowExtensionSetup] = useState(false);
   const [scanMode, setScanMode] = useState('light'); // 'light' or 'deep'
+  
+  // Deep scan progress tracking
+  const [isDeepScanning, setIsDeepScanning] = useState(false);
+  const [scanProgress, setScanProgress] = useState(0);
+  const [currentPlatform, setCurrentPlatform] = useState(null);
+  const [completedPlatforms, setCompletedPlatforms] = useState([]);
+  const [scanPlatforms, setScanPlatforms] = useState(['facebook', 'instagram', 'linkedin', 'x']);
 
   useEffect(() => {
     // Check for extension on mount
@@ -24,19 +32,38 @@ function AnalyzePage() {
     const cleanup = onExtensionEvent((eventType, eventData) => {
       console.log('Extension event:', eventType, eventData);
       
-      if (eventType === 'scanProgress') {
-        // Update progress if needed
-        console.log('Scan progress:', eventData);
+      if (eventType === 'scanStarted') {
+        setIsDeepScanning(true);
+        setScanProgress(0);
+        setCurrentPlatform(null);
+        setCompletedPlatforms([]);
+      } else if (eventType === 'platformScanStarted') {
+        setCurrentPlatform(eventData.platform);
+      } else if (eventType === 'platformScanCompleted') {
+        setCompletedPlatforms(prev => [...prev, eventData.platform]);
+      } else if (eventType === 'scanProgress') {
+        setScanProgress(eventData.progress || 0);
+        if (eventData.currentPlatform) {
+          setCurrentPlatform(eventData.currentPlatform);
+        }
+        if (eventData.completedPlatforms) {
+          setCompletedPlatforms(eventData.completedPlatforms);
+        }
       } else if (eventType === 'scanCompleted') {
         // Handle scan completion
+        setIsDeepScanning(false);
         navigate('/results', { state: { results: eventData.results } });
         setIsLoading(false);
-      } else if (eventType === 'scanCancelled' || eventType === 'scanError') {
-        // Handle scan cancellation or error
+      } else if (eventType === 'scanCancelled') {
+        // Handle scan cancellation
+        setIsDeepScanning(false);
         setIsLoading(false);
-        if (eventType === 'scanError') {
-          setError(eventData.error || 'Scan failed');
-        }
+        setError('Scan was cancelled');
+      } else if (eventType === 'scanError') {
+        // Handle scan error
+        setIsDeepScanning(false);
+        setIsLoading(false);
+        setError(eventData.error || 'Scan failed');
       } else if (eventType === 'extensionReady') {
         // Extension is ready
         setExtensionReady(true);
@@ -91,14 +118,18 @@ function AnalyzePage() {
     }
 
     setIsLoading(true);
+    setIsDeepScanning(true);
     setError(null);
+    setScanProgress(0);
+    setCurrentPlatform(null);
+    setCompletedPlatforms([]);
 
     try {
       // Start the scan via extension
       await startDeepScanViaExtension({
         identifierType: 'username',
         identifierValue: identifier.trim(),
-        platforms: ['facebook', 'instagram', 'linkedin', 'x']
+        platforms: scanPlatforms
       });
 
       // Results will come via onExtensionEvent listener
@@ -106,8 +137,32 @@ function AnalyzePage() {
     } catch (err) {
       setError(err.message);
       setIsLoading(false);
+      setIsDeepScanning(false);
     }
   };
+
+  const handleCancelScan = async () => {
+    try {
+      await cancelScan();
+      setIsDeepScanning(false);
+      setIsLoading(false);
+    } catch (err) {
+      console.error('Failed to cancel scan:', err);
+    }
+  };
+
+  // Show interactive loading during deep scan
+  if (isDeepScanning) {
+    return (
+      <InteractiveLoading
+        platforms={scanPlatforms}
+        currentPlatform={currentPlatform}
+        completedPlatforms={completedPlatforms}
+        progress={scanProgress}
+        onCancel={handleCancelScan}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 to-white py-12 px-4">

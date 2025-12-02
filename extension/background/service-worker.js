@@ -42,6 +42,25 @@ const SUPPORTED_PLATFORMS = {
 let currentScan = null;
 let scanResults = {};
 
+// Keep-alive mechanism to prevent service worker from going inactive
+let keepAliveInterval;
+
+function startKeepAlive() {
+  if (keepAliveInterval) return; // Already running
+  keepAliveInterval = setInterval(() => {
+    chrome.runtime.getPlatformInfo(() => {
+      // This keeps the service worker alive
+    });
+  }, 20000); // Every 20 seconds
+}
+
+function stopKeepAlive() {
+  if (keepAliveInterval) {
+    clearInterval(keepAliveInterval);
+    keepAliveInterval = null;
+  }
+}
+
 // =============================================================================
 // MESSAGE HANDLERS
 // =============================================================================
@@ -161,6 +180,9 @@ async function startDeepScan(data) {
   
   scanResults = {};
   
+  // Start keep-alive mechanism
+  startKeepAlive();
+  
   // Notify popup of scan start
   notifyPopup('scanStarted', { scanId: currentScan.id });
   
@@ -214,6 +236,9 @@ async function startDeepScan(data) {
     });
   }
   
+  // Stop keep-alive when scan is done
+  stopKeepAlive();
+  
   return { success: true, scanId: currentScan.id };
 }
 
@@ -245,6 +270,13 @@ async function scanPlatform(platform, identifier, identifierType) {
     searchResults: [],
     errors: []
   };
+  
+  // Notify about platform scan start
+  notifyPopup('platformScanStarted', {
+    platform,
+    platformName: platformConfig.name,
+    emoji: platformConfig.emoji
+  });
   
   // Send message to content script if a tab with this platform is already open
   try {
@@ -282,6 +314,16 @@ async function scanPlatform(platform, identifier, identifierType) {
   if (scanResults[platform].status === 'scanning') {
     scanResults[platform].status = 'completed';
   }
+  
+  // Notify about platform scan completion
+  notifyPopup('platformScanCompleted', {
+    platform,
+    platformName: platformConfig.name,
+    emoji: platformConfig.emoji,
+    status: scanResults[platform].status,
+    profilesFound: scanResults[platform].profiles.length,
+    searchResultsFound: scanResults[platform].searchResults.length
+  });
 }
 
 /**
@@ -395,6 +437,9 @@ function cancelScan() {
   
   currentScan.status = 'cancelled';
   currentScan.endTime = Date.now();
+  
+  // Stop keep-alive when scan is cancelled
+  stopKeepAlive();
   
   notifyPopup('scanCancelled', { scanId: currentScan.id });
   
