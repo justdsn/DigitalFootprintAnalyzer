@@ -3,6 +3,13 @@
   "name": "Digital Footprint Analyzer",
   "version": "1.0.0",
   "description": "Deep scan social media platforms for profile information and PII exposure analysis",
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:3000/*",
+      "http://localhost:*/*",
+      "https://localhost:*/*"
+    ]
+  },
   "permissions": [
     "activeTab",
     "storage"
