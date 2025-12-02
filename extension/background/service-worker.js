@@ -413,11 +413,21 @@ function generateScanId() {
 }
 
 /**
- * Send notification to popup
+ * Send notification to popup and web app
  */
 function notifyPopup(event, data) {
+  // Send to extension popup
   chrome.runtime.sendMessage({ event, data }).catch(() => {
     // Popup might be closed, ignore error
+  });
+  
+  // Send to web app content script
+  chrome.tabs.query({ url: ['http://localhost:3000/*', 'http://localhost:*/*'] }).then(tabs => {
+    tabs.forEach(tab => {
+      chrome.tabs.sendMessage(tab.id, { event, data }).catch(() => {
+        // Content script might not be loaded, ignore error
+      });
+    });
   });
 }
 
