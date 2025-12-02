@@ -20,6 +20,21 @@ Digital Footprint Analyzer is designed to help Sri Lankan citizens:
 
 ## Features
 
+### 🎯 Scanning Modes
+
+#### Light Scan
+- **Backend-based analysis** - Fast, automated analysis using public data
+- **No extension required** - Works directly in the web browser
+- **Multiple identifier types** - Analyzes usernames, emails, phone numbers, or names
+- **Platform URL generation** - Direct links to potential profiles
+
+#### Deep Scan (Chrome Extension)
+- **Live data extraction** - Scrapes actual social media profiles in real-time
+- **Automated workflow** - One-click scanning from the web app
+- **Multi-platform support** - Facebook, Instagram, LinkedIn, and X (Twitter)
+- **Direct integration** - Extension communicates with web app automatically
+- **Comprehensive results** - Extracts profile data, PII, and generates risk assessment
+
 ### PII (Personally Identifiable Information) Extraction
 - **Email Detection** - RFC 5322 compliant email pattern matching
 - **Sri Lankan Phone Numbers** - Support for local (07X-XXXXXXX) and international (+94) formats
@@ -64,6 +79,14 @@ Digital Footprint Analyzer is designed to help Sri Lankan citizens:
 | **React Router** | Client-side routing |
 | **Tailwind CSS** | Utility-first CSS framework |
 | **Context API** | State management for i18n |
+
+### Chrome Extension
+| Technology | Purpose |
+|------------|---------|
+| **Manifest V3** | Chrome Extension framework |
+| **Service Worker** | Background processing and orchestration |
+| **Content Scripts** | Social media profile data extraction |
+| **External Messaging** | Web app ↔ extension communication |
 
 ### DevOps
 | Technology | Purpose |
@@ -132,6 +155,23 @@ DigitalFootprintAnalyzer/
 │   ├── nginx.conf
 │   └── .env.example
 ├── docker-compose.yml            # Docker orchestration
+├── extension/                    # Chrome extension for deep scanning
+│   ├── manifest.json            # Extension manifest
+│   ├── background/
+│   │   └── service-worker.js    # Background service worker
+│   ├── content/
+│   │   ├── shared.js            # Shared utilities
+│   │   ├── facebook.js          # Facebook scraper
+│   │   ├── instagram.js         # Instagram scraper
+│   │   ├── linkedin.js          # LinkedIn scraper
+│   │   └── x.js                 # X (Twitter) scraper
+│   ├── popup/
+│   │   ├── popup.html           # Extension popup UI
+│   │   ├── popup.js             # Popup logic
+│   │   └── popup.css            # Popup styles
+│   ├── lib/
+│   │   └── api.js               # API communication helper
+│   └── icons/
 └── README.md                     # This file
 ```
 
@@ -216,6 +256,35 @@ DigitalFootprintAnalyzer/
    ```bash
    npm start
    ```
+
+#### Chrome Extension Setup (For Deep Scan)
+
+1. **Open Chrome Extensions**
+   - Navigate to `chrome://extensions/`
+   - Enable "Developer mode" (toggle in top right corner)
+
+2. **Load the extension**
+   - Click "Load unpacked"
+   - Select the `extension/` folder from the project directory
+
+3. **Get Extension ID**
+   - After loading, the extension will appear in your extensions list
+   - Copy the Extension ID (32-character string displayed under the extension name)
+   - Or click the extension icon and copy the ID from the popup
+
+4. **Connect to Web App**
+   - Open the web app at http://localhost:3000
+   - Go to the Analyze page
+   - Select "Deep Scan" mode
+   - Click "Setup Extension" when prompted
+   - Paste the Extension ID and click "Connect Extension"
+
+5. **Start Deep Scanning**
+   - Once connected, you can perform deep scans directly from the web app
+   - The extension will automatically scrape profiles across platforms
+   - Results are sent back to the web app and displayed automatically
+
+> **Note:** The extension requires you to be logged into the social media platforms for deep scanning to work properly. Make sure you're logged into Facebook, Instagram, LinkedIn, and X (Twitter) in Chrome before starting a deep scan.
 
 ## API Documentation
 
@@ -327,7 +396,7 @@ pytest tests/ -v --cov=app
 
 ### Phase 3 (Future)
 - [ ] Machine learning for impersonation detection
-- [ ] Browser extension
+- [x] Browser extension for deep scanning
 - [ ] Mobile application
 - [ ] Tamil language support
 
