@@ -266,11 +266,11 @@ async function scanPlatform(platform, identifier, identifierType) {
   
   // Build search query based on identifier type
   let searchQuery = identifier;
-  if (identifierType === 'name') {
-    searchQuery = encodeURIComponent(identifier);
-  } else if (identifierType === 'email') {
+  if (identifierType === 'email') {
+    // Extract username part of email for searching
     searchQuery = identifier.split('@')[0];
   }
+  // Note: Names will be URL-encoded when building the search URL
   
   // Initialize platform results
   scanResults[platform] = {
@@ -297,13 +297,15 @@ async function scanPlatform(platform, identifier, identifierType) {
     emoji: platformConfig.emoji
   });
   
+  let tab = null;
+  
   try {
     // ✅ FIX: Always create a new tab with the search URL
-    const searchUrl = platformConfig.searchUrlPattern + encodeURIComponent(identifier);
+    const searchUrl = platformConfig.searchUrlPattern + encodeURIComponent(searchQuery);
     console.log(`[Scan] Opening tab for ${platform}: ${searchUrl}`);
     
     // Create new tab in background (not active)
-    const tab = await chrome.tabs.create({ 
+    tab = await chrome.tabs.create({ 
       url: searchUrl, 
       active: false 
     });
@@ -311,6 +313,9 @@ async function scanPlatform(platform, identifier, identifierType) {
     console.log(`[Scan] Tab created for ${platform}, ID: ${tab.id}`);
     
     // Wait for page to load (give content script time to inject)
+    // Note: A fixed 5-second delay is used for simplicity. While not ideal for all network
+    // conditions, it provides a good balance between reliability and scan speed.
+    // A more sophisticated approach would use chrome.tabs.onUpdated or content script readiness checks.
     await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds for page load
     
     // Send message to content script to extract results
@@ -329,18 +334,20 @@ async function scanPlatform(platform, identifier, identifierType) {
     // Wait for content script to extract and send results (max 20 seconds per platform)
     await waitForPlatformResults(platform, 20000);
     
-    // Close the tab after extraction
-    try {
-      await chrome.tabs.remove(tab.id);
-      console.log(`[Scan] Closed tab for ${platform}`);
-    } catch (closeError) {
-      console.warn(`[Scan] Could not close tab for ${platform}:`, closeError);
-    }
-    
   } catch (error) {
     console.error(`[Scan] Error scanning ${platform}:`, error);
     scanResults[platform].status = 'error';
     scanResults[platform].errors.push(error.message);
+  } finally {
+    // Always close the tab after extraction, even if there was an error
+    if (tab && tab.id) {
+      try {
+        await chrome.tabs.remove(tab.id);
+        console.log(`[Scan] Closed tab for ${platform}`);
+      } catch (closeError) {
+        console.warn(`[Scan] Could not close tab for ${platform}:`, closeError);
+      }
+    }
   }
   
   // Mark as completed if still scanning
