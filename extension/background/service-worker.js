@@ -43,26 +43,26 @@ let currentScan = null;
 let scanResults = {};
 
 // Keep-alive mechanism to prevent service worker from going inactive
-let keepAliveInterval;
+let keepAliveInterval = null;
 
 function startKeepAlive() {
   if (keepAliveInterval) return; // Already running
+  
+  console.log('[Service Worker] Starting keep-alive');
   keepAliveInterval = setInterval(() => {
-    try {
-      chrome.runtime.getPlatformInfo(() => {
-        // This keeps the service worker alive
-        if (chrome.runtime.lastError) {
-          console.error('Keep-alive error:', chrome.runtime.lastError);
-        }
-      });
-    } catch (error) {
-      console.error('Keep-alive exception:', error);
-    }
+    // Ping runtime to keep worker alive
+    chrome.runtime.getPlatformInfo(() => {
+      console.log('[Service Worker] Keep-alive ping');
+      if (chrome.runtime.lastError) {
+        console.error('[Service Worker] Keep-alive error:', chrome.runtime.lastError);
+      }
+    });
   }, 20000); // Every 20 seconds
 }
 
 function stopKeepAlive() {
   if (keepAliveInterval) {
+    console.log('[Service Worker] Stopping keep-alive');
     clearInterval(keepAliveInterval);
     keepAliveInterval = null;
   }
@@ -190,61 +190,64 @@ async function startDeepScan(data) {
   // Start keep-alive mechanism
   startKeepAlive();
   
-  // Notify popup of scan start
-  notifyPopup('scanStarted', { scanId: currentScan.id });
-  
-  // Start scanning each platform
-  for (const platform of currentScan.platforms) {
-    if (currentScan.status !== 'in_progress') {
-      break; // Scan was cancelled
-    }
+  try {
+    // Notify popup of scan start
+    notifyPopup('scanStarted', { scanId: currentScan.id });
     
-    currentScan.currentPlatform = platform;
-    await scanPlatform(platform, identifierValue, identifierType);
-    currentScan.completedPlatforms.push(platform);
-    currentScan.progress = (currentScan.completedPlatforms.length / currentScan.platforms.length) * 100;
-    
-    // Notify popup of progress
-    notifyPopup('scanProgress', {
-      platform,
-      progress: currentScan.progress,
-      completedPlatforms: currentScan.completedPlatforms
-    });
-  }
-  
-  // Finalize scan
-  if (currentScan.status === 'in_progress') {
-    currentScan.status = 'completed';
-    currentScan.endTime = Date.now();
-    currentScan.results = scanResults;
-    
-    // Send results to backend
-    try {
-      const backendResponse = await sendToBackend('/api/deep-scan/analyze', {
-        scan_id: currentScan.id,
-        identifier_type: currentScan.identifierType,
-        identifier_value: currentScan.identifierValue,
-        platforms_scanned: currentScan.completedPlatforms,
-        results: scanResults,
-        scan_duration_ms: currentScan.endTime - currentScan.startTime
-      });
+    // Start scanning each platform
+    for (const platform of currentScan.platforms) {
+      if (currentScan.status !== 'in_progress') {
+        break; // Scan was cancelled
+      }
       
-      currentScan.backendAnalysis = backendResponse;
-    } catch (error) {
-      console.error('Failed to send results to backend:', error);
-      currentScan.backendError = error.message;
+      currentScan.currentPlatform = platform;
+      await scanPlatform(platform, identifierValue, identifierType);
+      currentScan.completedPlatforms.push(platform);
+      currentScan.progress = (currentScan.completedPlatforms.length / currentScan.platforms.length) * 100;
+      
+      // Notify popup of progress
+      notifyPopup('scanProgress', {
+        platform,
+        progress: currentScan.progress,
+        completedPlatforms: currentScan.completedPlatforms
+      });
     }
     
-    // Notify popup of completion
-    notifyPopup('scanCompleted', {
-      scanId: currentScan.id,
-      results: currentScan.results,
-      analysis: currentScan.backendAnalysis
-    });
+    // Finalize scan
+    if (currentScan.status === 'in_progress') {
+      currentScan.status = 'completed';
+      currentScan.endTime = Date.now();
+      currentScan.results = scanResults;
+      
+      // Send results to backend
+      try {
+        const backendResponse = await sendToBackend('/api/deep-scan/analyze', {
+          scan_id: currentScan.id,
+          identifier_type: currentScan.identifierType,
+          identifier_value: currentScan.identifierValue,
+          platforms_scanned: currentScan.completedPlatforms,
+          results: scanResults,
+          scan_duration_ms: currentScan.endTime - currentScan.startTime
+        });
+        
+        currentScan.backendAnalysis = backendResponse;
+      } catch (error) {
+        console.error('Failed to send results to backend:', error);
+        currentScan.backendError = error.message;
+      }
+      
+      // Notify popup of completion
+      notifyPopup('scanCompleted', {
+        scanId: currentScan.id,
+        results: currentScan.results,
+        analysis: currentScan.backendAnalysis
+      });
+    }
+    
+  } finally {
+    // Always stop keep-alive when scan ends
+    stopKeepAlive();
   }
-  
-  // Stop keep-alive when scan is done
-  stopKeepAlive();
   
   return { success: true, scanId: currentScan.id };
 }
@@ -259,14 +262,15 @@ async function scanPlatform(platform, identifier, identifierType) {
   const platformConfig = SUPPORTED_PLATFORMS[platform];
   if (!platformConfig) return;
   
+  console.log(`[Scan] Starting scan for ${platform} with identifier: ${identifier}`);
+  
   // Build search query based on identifier type
   let searchQuery = identifier;
-  if (identifierType === 'name') {
-    searchQuery = encodeURIComponent(identifier);
-  } else if (identifierType === 'email') {
+  if (identifierType === 'email') {
     // Extract username part of email for searching
     searchQuery = identifier.split('@')[0];
   }
+  // Note: Names will be URL-encoded when building the search URL
   
   // Initialize platform results
   scanResults[platform] = {
@@ -275,46 +279,75 @@ async function scanPlatform(platform, identifier, identifierType) {
     status: 'scanning',
     profiles: [],
     searchResults: [],
-    errors: []
+    errors: [],
+    startTime: Date.now()
   };
   
-  // Notify about platform scan start
+  // Notify web app that platform scan started
+  notifyWebApp('platformStarted', {
+    platform: platformConfig.name,
+    platformKey: platform,
+    emoji: platformConfig.emoji
+  });
+  
+  // Notify popup about platform scan start
   notifyPopup('platformScanStarted', {
     platform,
     platformName: platformConfig.name,
     emoji: platformConfig.emoji
   });
   
-  // Send message to content script if a tab with this platform is already open
+  let tab = null;
+  
   try {
-    // Build URL patterns for tab query - X platform needs both x.com and twitter.com
-    let urlPatterns;
-    if (platform === 'x') {
-      urlPatterns = ['*://*.x.com/*', '*://*.twitter.com/*'];
-    } else {
-      urlPatterns = [`*://*.${platform}.com/*`];
-    }
+    // ✅ FIX: Always create a new tab with the search URL
+    const searchUrl = platformConfig.searchUrlPattern + encodeURIComponent(searchQuery);
+    console.log(`[Scan] Opening tab for ${platform}: ${searchUrl}`);
     
-    // Query tabs for all matching patterns
-    const tabPromises = urlPatterns.map(pattern => chrome.tabs.query({ url: pattern }));
-    const tabResults = await Promise.all(tabPromises);
-    const tabs = tabResults.flat();
+    // Create new tab in background (not active)
+    tab = await chrome.tabs.create({ 
+      url: searchUrl, 
+      active: false 
+    });
     
-    if (tabs.length > 0) {
-      // Use existing tab
-      await chrome.tabs.sendMessage(tabs[0].id, {
+    console.log(`[Scan] Tab created for ${platform}, ID: ${tab.id}`);
+    
+    // Wait for page to load (give content script time to inject)
+    // Note: A fixed 5-second delay is used for simplicity. While not ideal for all network
+    // conditions, it provides a good balance between reliability and scan speed.
+    // A more sophisticated approach would use chrome.tabs.onUpdated or content script readiness checks.
+    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds for page load
+    
+    // Send message to content script to extract results
+    try {
+      console.log(`[Scan] Sending extraction message to tab ${tab.id}`);
+      await chrome.tabs.sendMessage(tab.id, {
         action: 'extractSearchResults',
         query: identifier,
         identifierType
       });
+    } catch (msgError) {
+      console.error(`[Scan] Failed to send message to ${platform} tab:`, msgError);
+      scanResults[platform].errors.push(`Failed to communicate with tab: ${msgError.message}`);
     }
     
-    // Wait for results with timeout
-    await waitForPlatformResults(platform, 10000);
+    // Wait for content script to extract and send results (max 20 seconds per platform)
+    await waitForPlatformResults(platform, 20000);
     
   } catch (error) {
+    console.error(`[Scan] Error scanning ${platform}:`, error);
     scanResults[platform].status = 'error';
     scanResults[platform].errors.push(error.message);
+  } finally {
+    // Always close the tab after extraction, even if there was an error
+    if (tab && tab.id) {
+      try {
+        await chrome.tabs.remove(tab.id);
+        console.log(`[Scan] Closed tab for ${platform}`);
+      } catch (closeError) {
+        console.warn(`[Scan] Could not close tab for ${platform}:`, closeError);
+      }
+    }
   }
   
   // Mark as completed if still scanning
@@ -322,7 +355,21 @@ async function scanPlatform(platform, identifier, identifierType) {
     scanResults[platform].status = 'completed';
   }
   
-  // Notify about platform scan completion
+  // Calculate duration
+  scanResults[platform].endTime = Date.now();
+  scanResults[platform].duration = scanResults[platform].endTime - scanResults[platform].startTime;
+  
+  // Notify web app that platform scan completed
+  notifyWebApp('platformCompleted', {
+    platform: platformConfig.name,
+    platformKey: platform,
+    emoji: platformConfig.emoji,
+    count: scanResults[platform].profiles.length + scanResults[platform].searchResults.length,
+    duration: scanResults[platform].duration,
+    status: scanResults[platform].status
+  });
+  
+  // Notify popup about platform scan completion
   notifyPopup('platformScanCompleted', {
     platform,
     platformName: platformConfig.name,
@@ -331,6 +378,8 @@ async function scanPlatform(platform, identifier, identifierType) {
     profilesFound: scanResults[platform].profiles.length,
     searchResultsFound: scanResults[platform].searchResults.length
   });
+  
+  console.log(`[Scan] Completed ${platform} scan in ${scanResults[platform].duration}ms`);
 }
 
 /**
@@ -341,13 +390,18 @@ function waitForPlatformResults(platform, timeout) {
     const startTime = Date.now();
     
     const checkResults = () => {
+      const elapsed = Date.now() - startTime;
+      
       if (scanResults[platform]?.status !== 'scanning') {
+        console.log(`[Scan] ${platform} results received after ${elapsed}ms`);
         resolve();
         return;
       }
       
-      if (Date.now() - startTime > timeout) {
+      if (elapsed > timeout) {
+        console.warn(`[Scan] ${platform} timed out after ${elapsed}ms`);
         scanResults[platform].status = 'timeout';
+        scanResults[platform].errors.push(`Extraction timed out after ${timeout}ms`);
         resolve();
         return;
       }
@@ -480,6 +534,26 @@ function notifyPopup(event, data) {
         // Content script might not be loaded, ignore error
       });
     });
+  });
+}
+
+/**
+ * Send notification specifically to web app
+ */
+function notifyWebApp(event, data) {
+  // Send to web app content script
+  chrome.tabs.query({ url: ['http://localhost:3000/*', 'http://localhost:*/*'] }).then(tabs => {
+    tabs.forEach(tab => {
+      chrome.tabs.sendMessage(tab.id, {
+        action: 'webappEvent',
+        event,
+        data
+      }).catch((error) => {
+        console.warn(`Could not send event to web app tab ${tab.id}:`, error.message);
+      });
+    });
+  }).catch(err => {
+    console.warn('Could not query web app tabs:', err);
   });
 }
 

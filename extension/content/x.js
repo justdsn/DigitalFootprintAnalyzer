@@ -291,8 +291,15 @@
    * Handle messages from background script
    */
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log(`[${PLATFORM} Content Script] Received message:`, message.action);
+    
     if (message.action === 'extractSearchResults') {
+      console.log(`[${PLATFORM}] Starting extraction for query:`, message.query);
+      
       const results = extractSearchResults();
+      
+      console.log(`[${PLATFORM}] Extracted ${results.length} results`);
+      
       sendToBackground('searchResultsExtracted', {
         platform: PLATFORM,
         results: results,
@@ -301,7 +308,12 @@
       });
       sendResponse({ success: true, count: results.length });
     } else if (message.action === 'extractProfileData') {
+      console.log(`[${PLATFORM}] Starting profile data extraction`);
+      
       const profile = extractProfileData();
+      
+      console.log(`[${PLATFORM}] Profile data extracted`);
+      
       sendToBackground('profileDataExtracted', {
         platform: PLATFORM,
         profile: profile
