@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { analyze } from '../services/api';
-import { detectExtension, startDeepScanViaExtension, setExtensionId } from '../utils/extensionBridge';
+import { detectExtension, startDeepScanViaExtension, onExtensionEvent } from '../utils/extensionBridge';
 
 function AnalyzePage() {
   const navigate = useNavigate();
@@ -14,34 +14,44 @@ function AnalyzePage() {
   const [identifier, setIdentifier] = useState('');
   const [extensionReady, setExtensionReady] = useState(false);
   const [showExtensionSetup, setShowExtensionSetup] = useState(false);
-  const [extensionIdInput, setExtensionIdInput] = useState('');
   const [scanMode, setScanMode] = useState('light'); // 'light' or 'deep'
 
   useEffect(() => {
     // Check for extension on mount
     checkExtension();
-  }, []);
+    
+    // Listen for extension events
+    const cleanup = onExtensionEvent((eventType, eventData) => {
+      console.log('Extension event:', eventType, eventData);
+      
+      if (eventType === 'scanProgress') {
+        // Update progress if needed
+        console.log('Scan progress:', eventData);
+      } else if (eventType === 'scanCompleted') {
+        // Handle scan completion
+        navigate('/results', { state: { results: eventData.results } });
+        setIsLoading(false);
+      } else if (eventType === 'scanCancelled' || eventType === 'scanError') {
+        // Handle scan cancellation or error
+        setIsLoading(false);
+        if (eventType === 'scanError') {
+          setError(eventData.error || 'Scan failed');
+        }
+      } else if (eventType === 'extensionReady') {
+        // Extension is ready
+        setExtensionReady(true);
+      }
+    });
+    
+    return cleanup;
+  }, [navigate]);
 
   const checkExtension = async () => {
     const isInstalled = await detectExtension();
     setExtensionReady(isInstalled);
-  };
-
-  const handleConnectExtension = async () => {
-    if (extensionIdInput.trim()) {
-      try {
-        setExtensionId(extensionIdInput.trim());
-        // Verify the connection
-        const isInstalled = await detectExtension();
-        setExtensionReady(isInstalled);
-        if (isInstalled) {
-          setShowExtensionSetup(false);
-        } else {
-          setError('Failed to connect to extension. Please verify the Extension ID is correct.');
-        }
-      } catch (err) {
-        setError(err.message);
-      }
+    
+    if (!isInstalled) {
+      console.log('[Web App] Extension not detected');
     }
   };
 
@@ -84,19 +94,17 @@ function AnalyzePage() {
     setError(null);
 
     try {
-      // Automatically trigger extension
-      const result = await startDeepScanViaExtension({
+      // Start the scan via extension
+      await startDeepScanViaExtension({
         identifierType: 'username',
         identifierValue: identifier.trim(),
         platforms: ['facebook', 'instagram', 'linkedin', 'x']
       });
 
-      // Extension returns results - display them
-      navigate('/results', { state: { results: result } });
+      // Results will come via onExtensionEvent listener
 
     } catch (err) {
       setError(err.message);
-    } finally {
       setIsLoading(false);
     }
   };
@@ -287,7 +295,7 @@ function AnalyzePage() {
             <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="p-6 sm:p-8">
                 <div className="flex justify-between items-start mb-6">
-                  <h2 className="text-2xl font-bold text-slate-900">🔌 Connect Extension</h2>
+                  <h2 className="text-2xl font-bold text-slate-900">🔌 Install Extension</h2>
                   <button
                     onClick={() => setShowExtensionSetup(false)}
                     className="text-slate-400 hover:text-slate-600 transition-colors"
@@ -299,51 +307,27 @@ function AnalyzePage() {
                 </div>
 
                 <p className="text-slate-600 mb-6">
-                  To use Deep Scan, you need the Chrome extension installed and connected.
+                  To use Deep Scan, you need the Chrome extension installed.
                 </p>
 
                 <div className="space-y-6">
                   <div className="bg-slate-50 rounded-xl p-6">
-                    <h3 className="font-semibold text-slate-900 mb-3">Step 1: Install Extension</h3>
+                    <h3 className="font-semibold text-slate-900 mb-3">Installation Steps</h3>
                     <ol className="list-decimal list-inside space-y-2 text-sm text-slate-600">
                       <li>Open Chrome and go to <code className="bg-white px-2 py-1 rounded text-xs">chrome://extensions</code></li>
                       <li>Enable "Developer mode" (toggle in top right)</li>
                       <li>Click "Load unpacked"</li>
                       <li>Select the <code className="bg-white px-2 py-1 rounded text-xs">extension/</code> folder from this project</li>
+                      <li>Refresh this page</li>
                     </ol>
-                  </div>
-
-                  <div className="bg-slate-50 rounded-xl p-6">
-                    <h3 className="font-semibold text-slate-900 mb-3">Step 2: Get Extension ID</h3>
-                    <p className="text-sm text-slate-600 mb-4">
-                      After installing, the extension will show its ID. You can find it:
-                    </p>
-                    <ul className="list-disc list-inside space-y-2 text-sm text-slate-600 mb-4">
-                      <li>In the extension popup (click the extension icon)</li>
-                      <li>Or on the <code className="bg-white px-2 py-1 rounded text-xs">chrome://extensions</code> page under the extension card</li>
-                    </ul>
-
-                    <div className="mt-4">
-                      <label className="block text-sm font-medium text-slate-700 mb-2">
-                        Paste Extension ID:
-                      </label>
-                      <input
-                        type="text"
-                        value={extensionIdInput}
-                        onChange={(e) => setExtensionIdInput(e.target.value)}
-                        placeholder="e.g., abcdefghijklmnopqrstuvwxyz123456"
-                        className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
                   </div>
 
                   <div className="flex gap-3">
                     <button
-                      onClick={handleConnectExtension}
-                      disabled={!extensionIdInput.trim()}
-                      className="flex-1 py-3 px-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                      onClick={() => window.location.reload()}
+                      className="flex-1 py-3 px-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200"
                     >
-                      Connect Extension
+                      I've Installed the Extension
                     </button>
                     <button
                       onClick={() => setShowExtensionSetup(false)}

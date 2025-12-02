@@ -12,7 +12,8 @@
   },
   "permissions": [
     "activeTab",
-    "storage"
+    "storage",
+    "tabs"
   ],
   "host_permissions": [
     "https://www.facebook.com/*",
@@ -29,6 +30,14 @@
     "type": "module"
   },
   "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:3000/*",
+        "http://localhost:*/*"
+      ],
+      "js": ["content/webapp-bridge.js"],
+      "run_at": "document_start"
+    },
     {
       "matches": ["https://www.facebook.com/*", "https://facebook.com/*"],
       "js": ["content/shared.js", "content/facebook.js"],

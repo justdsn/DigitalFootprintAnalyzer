@@ -1,134 +1,169 @@
 /**
  * Extension Bridge - Handles communication between web app and Chrome extension
+ * Uses window.postMessage for cross-context communication
  */
 
-/* global chrome */
-
-// Extension ID (will be set after extension is loaded)
-let EXTENSION_ID = null;
+let requestIdCounter = 0;
+const pendingRequests = new Map();
 
 /**
- * Detect and connect to the extension
- * @returns {Promise<boolean>} Whether extension is installed
+ * Send message to extension via content script
  */
-export async function detectExtension() {
-  // Try to get extension ID from storage
-  const storedId = localStorage.getItem('dfa_extension_id');
-  
-  if (storedId) {
-    // Validate stored ID format
-    const trimmedId = storedId.trim();
-    if (trimmedId.length === 32 && /^[a-z]{32}$/.test(trimmedId)) {
-      const isInstalled = await checkExtensionById(trimmedId);
-      if (isInstalled) {
-        EXTENSION_ID = trimmedId;
-        return true;
+function sendMessageToExtension(action, data = null) {
+  return new Promise((resolve, reject) => {
+    const requestId = ++requestIdCounter;
+    
+    // Store resolver
+    pendingRequests.set(requestId, { resolve, reject });
+    
+    // Send message via postMessage to same origin
+    window.postMessage({
+      source: 'dfa-webapp',
+      requestId,
+      action,
+      data
+    }, window.location.origin);
+    
+    // Timeout after 30 seconds
+    setTimeout(() => {
+      if (pendingRequests.has(requestId)) {
+        pendingRequests.delete(requestId);
+        reject(new Error('Extension request timeout'));
       }
-    } else {
-      // Invalid format, clear from storage
-      localStorage.removeItem('dfa_extension_id');
-    }
-  }
-  
-  // Extension ID not found or invalid, need user to provide it
-  return false;
+    }, 30000);
+  });
 }
 
 /**
- * Check if extension with given ID is installed
+ * Listen for responses from extension
  */
-async function checkExtensionById(extensionId) {
+window.addEventListener('message', (event) => {
+  // Only accept messages from same window and origin
+  if (event.source !== window) return;
+  
+  // Verify origin is localhost (security check)
+  const isLocalhost = event.origin === window.location.origin || 
+                     event.origin.startsWith('http://localhost:');
+  if (!isLocalhost) return;
+  
+  const message = event.data;
+  if (!message || message.source !== 'dfa-extension') return;
+  
+  // Handle response to a request
+  if (message.requestId && pendingRequests.has(message.requestId)) {
+    const { resolve, reject } = pendingRequests.get(message.requestId);
+    pendingRequests.delete(message.requestId);
+    
+    if (message.response?.success === false) {
+      reject(new Error(message.response.error || 'Extension request failed'));
+    } else {
+      resolve(message.response);
+    }
+  }
+  
+  // Handle events (scanProgress, scanCompleted, etc.)
+  if (message.event) {
+    const event = new CustomEvent('dfa-extension-event', {
+      detail: { event: message.event, data: message.data }
+    });
+    window.dispatchEvent(event);
+  }
+});
+
+/**
+ * Detect if extension is installed
+ */
+export async function detectExtension() {
   try {
-    const response = await chrome.runtime.sendMessage(
-      extensionId,
-      { action: 'checkExtension' }
-    );
-    return response?.installed === true;
+    const response = await sendMessageToExtension('checkExtension');
+    return response.installed === true;
   } catch (error) {
+    console.error('[Web App] Extension detection failed:', error);
     return false;
   }
 }
 
 /**
- * Set the extension ID manually (user provides after installation)
+ * Get extension info (version, ID)
  */
-export function setExtensionId(id) {
-  // Validate extension ID format (32 characters, alphanumeric)
-  if (!id || typeof id !== 'string') {
-    throw new Error('Invalid extension ID: must be a non-empty string');
-  }
-  
-  const trimmedId = id.trim();
-  if (trimmedId.length !== 32 || !/^[a-z]{32}$/.test(trimmedId)) {
-    console.warn('Extension ID format may be incorrect. Expected 32 lowercase letters.');
-  }
-  
-  EXTENSION_ID = trimmedId;
-  localStorage.setItem('dfa_extension_id', trimmedId);
-}
-
-/**
- * Get current extension ID
- */
-export function getExtensionId() {
-  return EXTENSION_ID;
-}
-
-/**
- * Send deep scan request to extension
- * @param {Object} scanData - Scan parameters
- * @returns {Promise<Object>} Scan results
- */
-export async function startDeepScanViaExtension(scanData) {
-  if (!EXTENSION_ID) {
-    throw new Error('Extension not connected. Please install and configure the extension first.');
-  }
-  
+export async function getExtensionInfo() {
   try {
-    // Send message to extension
-    const response = await chrome.runtime.sendMessage(
-      EXTENSION_ID,
-      {
-        action: 'startDeepScan',
-        data: {
-          identifierType: scanData.identifierType,
-          identifierValue: scanData.identifierValue,
-          platforms: scanData.platforms || ['facebook', 'instagram', 'linkedin', 'x']
-        }
-      }
-    );
-    
-    if (!response.success) {
-      throw new Error(response.error || 'Extension scan failed');
-    }
-    
-    return response.data;
-    
-  } catch (error) {
-    console.error('[Web App] Extension communication error:', error);
-    throw new Error('Failed to communicate with extension. Make sure it is installed and enabled.');
-  }
-}
-
-/**
- * Check extension status
- */
-export async function getExtensionStatus() {
-  if (!EXTENSION_ID) {
-    return { installed: false, ready: false };
-  }
-  
-  try {
-    const response = await chrome.runtime.sendMessage(
-      EXTENSION_ID,
-      { action: 'checkExtension' }
-    );
+    const response = await sendMessageToExtension('checkExtension');
     return {
-      installed: true,
-      ready: response?.ready === true,
-      version: response?.version
+      installed: response.installed,
+      version: response.version,
+      extensionId: response.extensionId,
+      ready: response.ready
     };
   } catch (error) {
-    return { installed: false, ready: false };
+    return {
+      installed: false,
+      version: null,
+      extensionId: null,
+      ready: false
+    };
   }
+}
+
+/**
+ * Start deep scan via extension
+ */
+export async function startDeepScanViaExtension(scanData) {
+  try {
+    const response = await sendMessageToExtension('startDeepScan', {
+      identifierType: scanData.identifierType,
+      identifierValue: scanData.identifierValue,
+      platforms: scanData.platforms || ['facebook', 'instagram', 'linkedin', 'x']
+    });
+    
+    if (!response.success) {
+      throw new Error(response.error || 'Scan failed');
+    }
+    
+    return response;
+    
+  } catch (error) {
+    console.error('[Web App] Scan request failed:', error);
+    throw new Error(`Failed to start scan: ${error.message}`);
+  }
+}
+
+/**
+ * Get current scan status
+ */
+export async function getScanStatus() {
+  try {
+    const response = await sendMessageToExtension('getScanStatus');
+    return response;
+  } catch (error) {
+    console.error('[Web App] Failed to get scan status:', error);
+    return { status: 'error', error: error.message };
+  }
+}
+
+/**
+ * Cancel current scan
+ */
+export async function cancelScan() {
+  try {
+    await sendMessageToExtension('cancelScan');
+  } catch (error) {
+    console.error('[Web App] Failed to cancel scan:', error);
+  }
+}
+
+/**
+ * Listen for extension events (progress, completion, etc.)
+ */
+export function onExtensionEvent(callback) {
+  const handler = (event) => {
+    callback(event.detail.event, event.detail.data);
+  };
+  
+  window.addEventListener('dfa-extension-event', handler);
+  
+  // Return cleanup function
+  return () => {
+    window.removeEventListener('dfa-extension-event', handler);
+  };
 }
