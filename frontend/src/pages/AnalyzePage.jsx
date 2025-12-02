@@ -31,6 +31,12 @@ function AnalyzePage() {
         // Handle scan completion
         navigate('/results', { state: { results: eventData.results } });
         setIsLoading(false);
+      } else if (eventType === 'scanCancelled' || eventType === 'scanError') {
+        // Handle scan cancellation or error
+        setIsLoading(false);
+        if (eventType === 'scanError') {
+          setError(eventData.error || 'Scan failed');
+        }
       } else if (eventType === 'extensionReady') {
         // Extension is ready
         setExtensionReady(true);
