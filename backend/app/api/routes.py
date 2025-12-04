@@ -2514,7 +2514,10 @@ async def deep_scan_analyze(request: DeepScanAnalyzeRequest) -> DeepScanAnalyzeR
                         })
                     if profile.get("bio"):
                         bio_text = profile["bio"]
-                        truncated_bio = bio_text[:BIO_MAX_LENGTH] + "..." if len(bio_text) > BIO_MAX_LENGTH else bio_text
+                        if len(bio_text) > BIO_MAX_LENGTH:
+                            truncated_bio = bio_text[:BIO_MAX_LENGTH - 3] + "..."
+                        else:
+                            truncated_bio = bio_text
                         all_pii.append({
                             "type": "bio",
                             "value": truncated_bio,

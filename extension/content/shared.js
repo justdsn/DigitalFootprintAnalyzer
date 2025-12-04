@@ -232,12 +232,12 @@ function extractPII(text) {
   });
   pii.phones = [...phonesSet];
   
-  // Extract URLs
-  const urlRegex = /https?:\/\/[^\s<>"'\)]+/g;
+  // Extract URLs (exclude parentheses to avoid issues with markdown/formatting)
+  const urlRegex = /https?:\/\/[^\s<>"'\(\)]+/g;
   const urls = text.match(urlRegex);
   if (urls) {
     // Clean up URLs that may have captured trailing punctuation
-    const cleanUrls = urls.map(url => url.replace(/[.,;:!?\)]+$/, ''));
+    const cleanUrls = urls.map(url => url.replace(/[.,;:!?]+$/, ''));
     pii.urls = [...new Set(cleanUrls)];
   }
   
@@ -291,8 +291,8 @@ function extractPII(text) {
   
   // Build year pattern: matches years from 1920 to current year
   // Example: if current year is 2024, matches 1920-1999 and 2000-2024
-  const startDecade = Math.floor(NIC_MIN_BIRTH_YEAR / 10) % 10;
-  const endDecade = Math.floor(currentYear / 10) % 10;
+  const startDecade = Math.floor((NIC_MIN_BIRTH_YEAR % 100) / 10); // For 1920: 2
+  const endDecade = Math.floor((currentYear % 100) / 10);  // For 2024: 2
   const yearPattern = `19[${startDecade}-9]\\d|20[0-${endDecade}]\\d`;
   
   const nicPatterns = [
@@ -312,10 +312,10 @@ function extractPII(text) {
   // Extract location coordinates (latitude, longitude)
   // Formats: lat,lng or lat, lng or (lat, lng)
   // Latitude: -90 to 90, Longitude: -180 to 180
-  // This is a simplified pattern - actual validation happens after extraction
+  // Simplified pattern that catches most coordinates; false positives filtered by context
   const coordPatterns = [
-    /[-+]?(?:[0-8]?\d(?:\.\d+)?|90(?:\.0+)?)\s*,\s*[-+]?(?:1[0-7]\d(?:\.\d+)?|180(?:\.0+)?|[0-9]{1,2}(?:\.\d+)?)/g,
-    /\([-+]?(?:[0-8]?\d(?:\.\d+)?|90(?:\.0+)?)\s*,\s*[-+]?(?:1[0-7]\d(?:\.\d+)?|180(?:\.0+)?|[0-9]{1,2}(?:\.\d+)?)\)/g
+    /[-+]?(?:[0-8]?\d(?:\.\d+)?|90(?:\.0+)?)\s*,\s*[-+]?(?:1[0-7]\d(?:\.\d+)?|180(?:\.0+)?|[0-9](?:\.\d+)?)/g,
+    /\([-+]?(?:[0-8]?\d(?:\.\d+)?|90(?:\.0+)?)\s*,\s*[-+]?(?:1[0-7]\d(?:\.\d+)?|180(?:\.0+)?|[0-9](?:\.\d+)?)\)/g
   ];
   
   const coordsSet = new Set();

@@ -423,12 +423,18 @@ async function scanPlatform(platform, identifier, identifierType, retryCount = 0
     );
     
     if (hasAuthError) {
-      // Don't retry auth errors
+      // Don't retry auth errors - user needs to log in
       return;
     }
     
+    // Check if we have retryable errors
+    const hasRetryableError = scanResults[platform].errors.some(e => 
+      typeof e === 'object' && 
+      (e.error_type === ERROR_TYPES.EXTRACTION_FAILED || e.error_type === ERROR_TYPES.TIMEOUT)
+    );
+    
     if (scanResults[platform].status === 'timeout' || 
-        (scanResults[platform].errors.length > 0 && retryCount < SCAN_CONFIG.MAX_RETRIES)) {
+        (hasRetryableError && retryCount < SCAN_CONFIG.MAX_RETRIES)) {
       throw new Error('Extraction failed or timed out');
     }
     
