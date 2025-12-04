@@ -339,31 +339,32 @@ function ResultsPage() {
               }
             >
               <div className="space-y-3">
-                {Object.entries(results.results).map(([platform, data]) => (
-                  <div
-                    key={platform}
-                    className="flex items-center justify-between p-3 rounded-lg border border-gray-100"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <span className="text-2xl">{data.emoji}</span>
-                      <div>
-                        <span className="font-medium">{data.platform}</span>
-                        <p className="text-xs text-gray-500">
-                          {data.status === 'completed' 
-                            ? `${(data.profiles?.length || 0) + (data.searchResults?.length || 0)} results` 
-                            : data.status}
-                        </p>
+                {Object.entries(results.results).map(([platform, data]) => {
+                  const resultCount = (data.profiles?.length || 0) + (data.searchResults?.length || 0);
+                  return (
+                    <div
+                      key={platform}
+                      className="flex items-center justify-between p-3 rounded-lg border border-gray-100"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <span className="text-2xl">{data.emoji}</span>
+                        <div>
+                          <span className="font-medium">{data.platform}</span>
+                          <p className="text-xs text-gray-500">
+                            {data.status === 'completed' ? `${resultCount} results` : data.status}
+                          </p>
+                        </div>
                       </div>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        data.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                        data.status === 'error' ? 'bg-red-100 text-red-800' : 
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        {data.status}
+                      </span>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      data.status === 'completed' ? 'bg-green-100 text-green-800' : 
-                      data.status === 'error' ? 'bg-red-100 text-red-800' : 
-                      'bg-gray-100 text-gray-600'
-                    }`}>
-                      {data.status}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </ResultCard>
           )}
@@ -581,7 +582,7 @@ function ResultsPage() {
                       <div key={idx} className="p-3 bg-gray-50 rounded-lg">
                         <p className="font-medium">{item.pii_label}: {item.exposed_value}</p>
                         <p className="text-xs text-gray-600 mt-1">
-                          Found on: {item.found_on?.join(', ')}
+                          Found on: {Array.isArray(item.found_on) ? item.found_on.join(', ') : 'N/A'}
                         </p>
                       </div>
                     ))}
