@@ -394,8 +394,8 @@
   async function performInstagramSearch(query) {
     console.log(`[${PLATFORM}] Performing search for: ${query}`);
     
-    // Find search input
-    const searchInput = await waitForElement('input[placeholder*="Search" i]', 10000);
+    // Find search input (reduced timeout for better UX)
+    const searchInput = await waitForElement('input[placeholder*="Search" i]', 5000);
     if (!searchInput) {
       throw new Error('Search input not found');
     }

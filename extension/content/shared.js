@@ -212,13 +212,15 @@ function extractPII(text) {
   }
   
   // Extract phone numbers (Sri Lankan and international formats)
-  // Sri Lankan: 07X-XXXXXXX, +947XXXXXXXX, 0112345678 (landline)
+  // Sri Lankan mobile: 07X-XXXXXXX, +947XXXXXXXX
+  // Sri Lankan landline: 011XXXXXXX, +9411XXXXXXX (fixed digit count)
   // International: +[country code][number]
   const phonePatterns = [
-    /\+94\s?[1-9]\d{8}/g,  // Sri Lankan international format
-    /0[1-9]\d{8}/g,         // Sri Lankan local format (mobile)
-    /0[1-9]\d{7}/g,         // Sri Lankan landline
-    /\+\d{1,3}\s?\d{6,14}/g // International format
+    /\+94\s?7[0-9]{8}/g,      // Sri Lankan international mobile format (+947XXXXXXXX)
+    /\+94\s?[1-9][1-9]\d{7}/g, // Sri Lankan international landline format
+    /\b07[0-9]{8}\b/g,         // Sri Lankan local mobile format (07XXXXXXXX)
+    /\b0[1-9][1-9]\d{7}\b/g,   // Sri Lankan landline (011XXXXXXX, etc.)
+    /\+[1-9]\d{1,3}\s?\d{6,14}/g // International format (other countries)
   ];
   
   const phonesSet = new Set();
@@ -283,10 +285,12 @@ function extractPII(text) {
   // Extract Sri Lankan National ID patterns
   // Old format: 9 digits + V/X (e.g., 123456789V)
   // New format: 12 digits starting with year of birth (e.g., 199912345678)
-  // Note: This is a simplified pattern. Real validation would check day/month ranges.
+  // Year range: 1920-current year for reasonable validation
+  const currentYear = new Date().getFullYear();
+  const yearPattern = currentYear > 2099 ? '20[0-9]\\d' : `19[2-9]\\d|20[0-${Math.floor((currentYear % 100) / 10)}]\\d`;
   const nicPatterns = [
-    /\b\d{9}[VvXx]\b/g,                    // Old NIC format
-    /\b(?:19[3-9]\d|20[0-2]\d)\d{8}\b/g   // New NIC format (birth years 1930-2029)
+    /\b\d{9}[VvXx]\b/g,                              // Old NIC format
+    new RegExp(`\\b(?:${yearPattern})\\d{8}\\b`, 'g') // New NIC format (birth years 1920-current)
   ];
   
   const nicsSet = new Set();
@@ -301,10 +305,10 @@ function extractPII(text) {
   // Extract location coordinates (latitude, longitude)
   // Formats: lat,lng or lat, lng or (lat, lng)
   // Latitude: -90 to 90, Longitude: -180 to 180
-  // Note: This is a basic pattern. Full validation would check exact ranges.
+  // This is a simplified pattern - actual validation happens after extraction
   const coordPatterns = [
-    /[-+]?(?:[0-8]?\d(?:\.\d+)?|90(?:\.0+)?)\s*,\s*[-+]?(?:1[0-7]\d(?:\.\d+)?|180(?:\.0+)?|\d{1,2}(?:\.\d+)?)/g,
-    /\([-+]?(?:[0-8]?\d(?:\.\d+)?|90(?:\.0+)?)\s*,\s*[-+]?(?:1[0-7]\d(?:\.\d+)?|180(?:\.0+)?|\d{1,2}(?:\.\d+)?)\)/g
+    /[-+]?(?:[0-8]?\d(?:\.\d+)?|90(?:\.0+)?)\s*,\s*[-+]?(?:1[0-7]\d(?:\.\d+)?|180(?:\.0+)?|[0-9]{1,2}(?:\.\d+)?)/g,
+    /\([-+]?(?:[0-8]?\d(?:\.\d+)?|90(?:\.0+)?)\s*,\s*[-+]?(?:1[0-7]\d(?:\.\d+)?|180(?:\.0+)?|[0-9]{1,2}(?:\.\d+)?)\)/g
   ];
   
   const coordsSet = new Set();

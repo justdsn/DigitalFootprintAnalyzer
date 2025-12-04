@@ -404,6 +404,15 @@ async function scanPlatform(platform, identifier, identifierType, retryCount = 0
     await waitForPlatformResults(platform, 20000);
     
     // Check if extraction was successful
+    const hasAuthError = scanResults[platform].errors.some(e => 
+      typeof e === 'object' && e.error_type === 'auth_required'
+    );
+    
+    if (hasAuthError) {
+      // Don't retry auth errors
+      return;
+    }
+    
     if (scanResults[platform].status === 'timeout' || 
         (scanResults[platform].errors.length > 0 && retryCount < maxRetries)) {
       throw new Error('Extraction failed or timed out');
