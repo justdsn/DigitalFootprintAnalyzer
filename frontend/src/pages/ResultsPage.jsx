@@ -78,8 +78,11 @@ function ResultsPage() {
   // ---------------------------------------------------------------------------
   // Scan Type Detection
   // ---------------------------------------------------------------------------
-  const isDeepScan = results?.scanId || results?.backendAnalysis;
-  const isLightScan = results?.platform_urls && !isDeepScan;
+  // Deep scan is identified by scanId or backendAnalysis properties
+  // Light scan is identified by platform_urls property
+  // If both exist, deep scan takes priority
+  const isDeepScan = !!(results?.scanId || results?.backendAnalysis);
+  const isLightScan = !!results?.platform_urls && !isDeepScan;
 
   // ---------------------------------------------------------------------------
   // Redirect if no results
@@ -385,7 +388,7 @@ function ResultsPage() {
               <div>
                 <ResultListItem 
                   label={t('results.patterns.length')} 
-                  value={`${results.pattern_analysis.length || 0} ${t('common.characters')}`} 
+                  value={`${results.pattern_analysis?.length || 0} ${t('common.characters')}`} 
                 />
                 <ResultListItem 
                   label={t('results.patterns.hasNumbers')} 
@@ -574,7 +577,7 @@ function ResultsPage() {
                 </svg>
               }
             >
-              {Object.entries(results.backendAnalysis.exposed_pii).map(([severity, items]) => (
+              {Object.entries(results.backendAnalysis?.exposed_pii || {}).map(([severity, items]) => (
                 <div key={severity} className="mb-4">
                   <h4 className="font-semibold text-sm mb-2 capitalize">{severity} Risk</h4>
                   <div className="space-y-2">
@@ -607,7 +610,7 @@ function ResultsPage() {
                 </svg>
               }
             >
-              {results.backendAnalysis.impersonation_risks.map((risk, idx) => (
+              {(results.backendAnalysis?.impersonation_risks || []).map((risk, idx) => (
                 <div key={idx} className={`p-4 rounded-lg mb-3 ${
                   risk.risk_level === 'critical' ? 'bg-red-50 border-l-4 border-red-500' :
                   risk.risk_level === 'high' ? 'bg-orange-50 border-l-4 border-orange-500' :
