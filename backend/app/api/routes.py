@@ -35,6 +35,9 @@ import io
 # Set up logger
 logger = logging.getLogger(__name__)
 
+# Constants
+BIO_MAX_LENGTH = 200  # Maximum length for bio text in PII extraction
+
 # Import request/response schemas
 from app.models.schemas import (
     AnalyzeRequest,
@@ -2510,9 +2513,11 @@ async def deep_scan_analyze(request: DeepScanAnalyzeRequest) -> DeepScanAnalyzeR
                             "risk_level": "medium"
                         })
                     if profile.get("bio"):
+                        bio_text = profile["bio"]
+                        truncated_bio = bio_text[:BIO_MAX_LENGTH] + "..." if len(bio_text) > BIO_MAX_LENGTH else bio_text
                         all_pii.append({
                             "type": "bio",
-                            "value": profile["bio"][:200],  # Truncate long bios
+                            "value": truncated_bio,
                             "platform": platform_key,
                             "platform_name": platform_data.get("platform", platform_key),
                             "source": profile.get("profileUrl", ""),

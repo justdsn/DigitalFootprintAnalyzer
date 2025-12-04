@@ -38,6 +38,23 @@ const SUPPORTED_PLATFORMS = {
   }
 };
 
+// Configuration constants
+const SCAN_CONFIG = {
+  MAX_RETRIES: 2,
+  RETRY_DELAYS: [3000, 6000], // Exponential backoff: 3s, 6s
+  PAGE_LOAD_TIMEOUT: 20000,
+  PLATFORM_EXTRACTION_TIMEOUT: 20000,
+  CONTENT_SCRIPT_WAIT: 2000
+};
+
+// Error type constants
+const ERROR_TYPES = {
+  AUTH_REQUIRED: 'auth_required',
+  TIMEOUT: 'timeout',
+  BLOCKED: 'blocked',
+  EXTRACTION_FAILED: 'extraction_failed'
+};
+
 // Scan state management
 let currentScan = null;
 let scanResults = {};
@@ -269,9 +286,6 @@ async function scanPlatform(platform, identifier, identifierType, retryCount = 0
   const platformConfig = SUPPORTED_PLATFORMS[platform];
   if (!platformConfig) return;
   
-  const maxRetries = 2;
-  const retryDelays = [3000, 6000]; // Exponential backoff: 3s, 6s
-  
   console.log(`[Scan] Starting scan for ${platform} with identifier: ${identifier} (attempt ${retryCount + 1})`);
   
   // Build search query based on identifier type
@@ -336,14 +350,14 @@ async function scanPlatform(platform, identifier, identifierType, retryCount = 0
     console.log(`[Scan] Tab created for ${platform}, ID: ${tab.id}`);
     
     // Wait for page to load using tab listener
-    const pageLoaded = await waitForTabLoad(tab.id, 20000);
+    const pageLoaded = await waitForTabLoad(tab.id, SCAN_CONFIG.PAGE_LOAD_TIMEOUT);
     
     if (!pageLoaded) {
       throw new Error('Page load timeout');
     }
     
     // Additional wait for content script injection
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    await new Promise(resolve => setTimeout(resolve, SCAN_CONFIG.CONTENT_SCRIPT_WAIT));
     
     // Check authentication status
     try {
@@ -353,13 +367,13 @@ async function scanPlatform(platform, identifier, identifierType, retryCount = 0
       
       if (!authCheck.authenticated) {
         const errorData = {
-          error_type: 'auth_required',
+          error_type: ERROR_TYPES.AUTH_REQUIRED,
           message: `You are not logged into ${platformConfig.name}`,
           suggestion: `Please log into ${platformConfig.name} and try again`,
           loginUrl: authCheck.loginUrl || platformConfig.searchUrlPattern.split('/search')[0]
         };
         
-        scanResults[platform].status = 'auth_required';
+        scanResults[platform].status = ERROR_TYPES.AUTH_REQUIRED;
         scanResults[platform].errors.push(errorData);
         
         console.log(`[Scan] Authentication required for ${platform}`);
@@ -400,12 +414,12 @@ async function scanPlatform(platform, identifier, identifierType, retryCount = 0
       }
     }
     
-    // Wait for content script to extract and send results (max 20 seconds per platform)
-    await waitForPlatformResults(platform, 20000);
+    // Wait for content script to extract and send results
+    await waitForPlatformResults(platform, SCAN_CONFIG.PLATFORM_EXTRACTION_TIMEOUT);
     
     // Check if extraction was successful
     const hasAuthError = scanResults[platform].errors.some(e => 
-      typeof e === 'object' && e.error_type === 'auth_required'
+      typeof e === 'object' && e.error_type === ERROR_TYPES.AUTH_REQUIRED
     );
     
     if (hasAuthError) {
@@ -414,7 +428,7 @@ async function scanPlatform(platform, identifier, identifierType, retryCount = 0
     }
     
     if (scanResults[platform].status === 'timeout' || 
-        (scanResults[platform].errors.length > 0 && retryCount < maxRetries)) {
+        (scanResults[platform].errors.length > 0 && retryCount < SCAN_CONFIG.MAX_RETRIES)) {
       throw new Error('Extraction failed or timed out');
     }
     
@@ -422,14 +436,14 @@ async function scanPlatform(platform, identifier, identifierType, retryCount = 0
     console.error(`[Scan] Error scanning ${platform} (attempt ${retryCount + 1}):`, error);
     
     const errorData = {
-      error_type: 'extraction_failed',
+      error_type: ERROR_TYPES.EXTRACTION_FAILED,
       message: `Failed to scan ${platformConfig.name}: ${error.message}`,
       suggestion: 'Please check your internet connection and try again'
     };
     
     // Retry logic
-    if (retryCount < maxRetries && error.message !== 'Page load timeout') {
-      const delay = retryDelays[retryCount];
+    if (retryCount < SCAN_CONFIG.MAX_RETRIES && error.message !== 'Page load timeout') {
+      const delay = SCAN_CONFIG.RETRY_DELAYS[retryCount];
       console.log(`[Scan] Retrying ${platform} in ${delay}ms...`);
       
       // Close the current tab

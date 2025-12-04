@@ -286,11 +286,18 @@ function extractPII(text) {
   // Old format: 9 digits + V/X (e.g., 123456789V)
   // New format: 12 digits starting with year of birth (e.g., 199912345678)
   // Year range: 1920-current year for reasonable validation
+  const NIC_MIN_BIRTH_YEAR = 1920;
   const currentYear = new Date().getFullYear();
-  const yearPattern = currentYear > 2099 ? '20[0-9]\\d' : `19[2-9]\\d|20[0-${Math.floor((currentYear % 100) / 10)}]\\d`;
+  
+  // Build year pattern: matches years from 1920 to current year
+  // Example: if current year is 2024, matches 1920-1999 and 2000-2024
+  const startDecade = Math.floor(NIC_MIN_BIRTH_YEAR / 10) % 10;
+  const endDecade = Math.floor(currentYear / 10) % 10;
+  const yearPattern = `19[${startDecade}-9]\\d|20[0-${endDecade}]\\d`;
+  
   const nicPatterns = [
-    /\b\d{9}[VvXx]\b/g,                              // Old NIC format
-    new RegExp(`\\b(?:${yearPattern})\\d{8}\\b`, 'g') // New NIC format (birth years 1920-current)
+    /\b\d{9}[VvXx]\b/g,                              // Old NIC format (9 digits + V/X)
+    new RegExp(`\\b(?:${yearPattern})\\d{8}\\b`, 'g') // New NIC format (12 digits total)
   ];
   
   const nicsSet = new Set();
