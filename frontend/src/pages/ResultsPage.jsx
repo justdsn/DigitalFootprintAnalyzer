@@ -76,6 +76,12 @@ function ResultsPage() {
   const { results } = location.state || {};
 
   // ---------------------------------------------------------------------------
+  // Scan Type Detection
+  // ---------------------------------------------------------------------------
+  const isDeepScan = results?.scanId || results?.backendAnalysis;
+  const isLightScan = results?.platform_urls && !isDeepScan;
+
+  // ---------------------------------------------------------------------------
   // Redirect if no results
   // ---------------------------------------------------------------------------
   if (!results) {
@@ -129,7 +135,9 @@ function ResultsPage() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Identifier</p>
-                <p className="font-semibold text-gray-900">{results.identifier}</p>
+                <p className="font-semibold text-gray-900">
+                  {results.identifier || results.identifierValue || results.identifier_value || 'N/A'}
+                </p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -140,7 +148,9 @@ function ResultsPage() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">Detected Type</p>
-                <p className="font-semibold text-gray-900 capitalize">{results.identifier_type}</p>
+                <p className="font-semibold text-gray-900 capitalize">
+                  {results.identifier_type || results.identifierType || 'unknown'}
+                </p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -151,7 +161,9 @@ function ResultsPage() {
               </div>
               <div>
                 <p className="text-sm text-gray-500">{t('results.summary.processingTime')}</p>
-                <p className="font-semibold text-gray-900">{results.processing_time_ms} {t('common.milliseconds')}</p>
+                <p className="font-semibold text-gray-900">
+                  {results.processing_time_ms || results.scan_duration_ms || 'N/A'} {t('common.milliseconds')}
+                </p>
               </div>
             </div>
           </div>
@@ -161,7 +173,10 @@ function ResultsPage() {
          * Risk Assessment
          * ------------------------------------------------------------------- */}
         <div className="mb-8">
-          <RiskIndicator score={results.risk_score} level={results.risk_level} />
+          <RiskIndicator 
+            score={results.risk_score || results.backendAnalysis?.risk_assessment?.score || 0} 
+            level={results.risk_level || results.backendAnalysis?.risk_assessment?.level || 'low'} 
+          />
         </div>
 
         {/* -------------------------------------------------------------------
@@ -276,76 +291,123 @@ function ResultsPage() {
          * ------------------------------------------------------------------- */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* -----------------------------------------------------------------
-           * Platform Profiles
+           * Platform Profiles - Light Scan Only
            * ----------------------------------------------------------------- */}
-          <ResultCard
-            title={t('results.platforms.title')}
-            subtitle={t('results.platforms.subtitle')}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
-            }
-          >
-            <div className="space-y-3">
-              {Object.entries(results.platform_urls).map(([platform, data]) => (
-                <a
-                  key={platform}
-                  href={data.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={`flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors ${platformColors[platform] || 'text-gray-600'}`}
-                >
-                  <div className="flex items-center space-x-3">
-                    {PlatformIcons[platform]}
-                    <span className="font-medium">{data.name}</span>
-                  </div>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </a>
-              ))}
-            </div>
-          </ResultCard>
+          {isLightScan && results.platform_urls && (
+            <ResultCard
+              title={t('results.platforms.title')}
+              subtitle={t('results.platforms.subtitle')}
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+              }
+            >
+              <div className="space-y-3">
+                {Object.entries(results.platform_urls).map(([platform, data]) => (
+                  <a
+                    key={platform}
+                    href={data.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex items-center justify-between p-3 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors ${platformColors[platform] || 'text-gray-600'}`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      {PlatformIcons[platform]}
+                      <span className="font-medium">{data.name}</span>
+                    </div>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                ))}
+              </div>
+            </ResultCard>
+          )}
 
           {/* -----------------------------------------------------------------
-           * Pattern Analysis
+           * Deep Scan Platform Results
            * ----------------------------------------------------------------- */}
-          <ResultCard
-            title={t('results.patterns.title')}
-            subtitle={t('results.patterns.subtitle')}
-            icon={
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-            }
-          >
-            <div>
-              <ResultListItem 
-                label={t('results.patterns.length')} 
-                value={`${results.pattern_analysis.length} ${t('common.characters')}`} 
-              />
-              <ResultListItem 
-                label={t('results.patterns.hasNumbers')} 
-                value={results.pattern_analysis.has_numbers ? t('common.yes') : t('common.no')}
-                valueClassName={results.pattern_analysis.has_numbers ? 'text-amber-600' : 'text-green-600'}
-              />
-              <ResultListItem 
-                label={t('results.patterns.hasUnderscores')} 
-                value={results.pattern_analysis.has_underscores ? t('common.yes') : t('common.no')} 
-              />
-              <ResultListItem 
-                label={t('results.patterns.numberDensity')} 
-                value={`${(results.pattern_analysis.number_density * 100).toFixed(0)}%`}
-                valueClassName={results.pattern_analysis.number_density > 0.3 ? 'text-amber-600' : 'text-green-600'}
-              />
-              <ResultListItem 
-                label={t('results.patterns.suspiciousPatterns')} 
-                value={results.pattern_analysis.has_suspicious_patterns ? t('common.yes') : t('common.no')}
-                valueClassName={results.pattern_analysis.has_suspicious_patterns ? 'text-red-600' : 'text-green-600'}
-              />
-            </div>
-          </ResultCard>
+          {isDeepScan && results.results && (
+            <ResultCard
+              title="Scanned Platforms"
+              subtitle="Platforms searched during deep scan"
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              }
+            >
+              <div className="space-y-3">
+                {Object.entries(results.results).map(([platform, data]) => (
+                  <div
+                    key={platform}
+                    className="flex items-center justify-between p-3 rounded-lg border border-gray-100"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <span className="text-2xl">{data.emoji}</span>
+                      <div>
+                        <span className="font-medium">{data.platform}</span>
+                        <p className="text-xs text-gray-500">
+                          {data.status === 'completed' 
+                            ? `${(data.profiles?.length || 0) + (data.searchResults?.length || 0)} results` 
+                            : data.status}
+                        </p>
+                      </div>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      data.status === 'completed' ? 'bg-green-100 text-green-800' : 
+                      data.status === 'error' ? 'bg-red-100 text-red-800' : 
+                      'bg-gray-100 text-gray-600'
+                    }`}>
+                      {data.status}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </ResultCard>
+          )}
+
+          {/* -----------------------------------------------------------------
+           * Pattern Analysis - Light Scan Only
+           * ----------------------------------------------------------------- */}
+          {results.pattern_analysis && (
+            <ResultCard
+              title={t('results.patterns.title')}
+              subtitle={t('results.patterns.subtitle')}
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              }
+            >
+              <div>
+                <ResultListItem 
+                  label={t('results.patterns.length')} 
+                  value={`${results.pattern_analysis.length || 0} ${t('common.characters')}`} 
+                />
+                <ResultListItem 
+                  label={t('results.patterns.hasNumbers')} 
+                  value={results.pattern_analysis.has_numbers ? t('common.yes') : t('common.no')}
+                  valueClassName={results.pattern_analysis.has_numbers ? 'text-amber-600' : 'text-green-600'}
+                />
+                <ResultListItem 
+                  label={t('results.patterns.hasUnderscores')} 
+                  value={results.pattern_analysis.has_underscores ? t('common.yes') : t('common.no')} 
+                />
+                <ResultListItem 
+                  label={t('results.patterns.numberDensity')} 
+                  value={`${(results.pattern_analysis.number_density * 100).toFixed(0)}%`}
+                  valueClassName={results.pattern_analysis.number_density > 0.3 ? 'text-amber-600' : 'text-green-600'}
+                />
+                <ResultListItem 
+                  label={t('results.patterns.suspiciousPatterns')} 
+                  value={results.pattern_analysis.has_suspicious_patterns ? t('common.yes') : t('common.no')}
+                  valueClassName={results.pattern_analysis.has_suspicious_patterns ? 'text-red-600' : 'text-green-600'}
+                />
+              </div>
+            </ResultCard>
+          )}
         </div>
 
         {/* -------------------------------------------------------------------
@@ -361,7 +423,7 @@ function ResultsPage() {
               </svg>
             }
           >
-            {results.variations.length > 0 ? (
+            {results.variations && results.variations.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {results.variations.slice(0, 20).map((variation) => (
                   <ResultBadge key={variation} variant={variation === results.username ? 'primary' : 'default'}>
@@ -398,7 +460,7 @@ function ResultsPage() {
               {/* Emails */}
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-2">{t('results.pii.emails')}</h4>
-                {results.extracted_pii.emails?.length > 0 ? (
+                {results.extracted_pii?.emails?.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {results.extracted_pii.emails.map((email, index) => (
                       <ResultBadge key={index} variant="warning">{email}</ResultBadge>
@@ -412,7 +474,7 @@ function ResultsPage() {
               {/* Phones */}
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-2">{t('results.pii.phones')}</h4>
-                {results.extracted_pii.phones?.length > 0 ? (
+                {results.extracted_pii?.phones?.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {results.extracted_pii.phones.map((phone, index) => (
                       <ResultBadge key={index} variant="warning">{phone}</ResultBadge>
@@ -426,7 +488,7 @@ function ResultsPage() {
               {/* Mentions */}
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-2">{t('results.pii.mentions')}</h4>
-                {results.extracted_pii.mentions?.length > 0 ? (
+                {results.extracted_pii?.mentions?.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {results.extracted_pii.mentions.map((mention, index) => (
                       <ResultBadge key={index} variant="primary">{mention}</ResultBadge>
@@ -455,7 +517,7 @@ function ResultsPage() {
               {/* Persons */}
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-2">{t('results.entities.persons')}</h4>
-                {results.ner_entities.persons?.length > 0 ? (
+                {results.ner_entities?.persons?.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {results.ner_entities.persons.map((person, index) => (
                       <ResultBadge key={index} variant="primary">{person}</ResultBadge>
@@ -469,7 +531,7 @@ function ResultsPage() {
               {/* Locations */}
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-2">{t('results.entities.locations')}</h4>
-                {results.ner_entities.locations?.length > 0 ? (
+                {results.ner_entities?.locations?.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {results.ner_entities.locations.map((location, index) => (
                       <ResultBadge key={index} variant="accent">{location}</ResultBadge>
@@ -483,7 +545,7 @@ function ResultsPage() {
               {/* Organizations */}
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-2">{t('results.entities.organizations')}</h4>
-                {results.ner_entities.organizations?.length > 0 ? (
+                {results.ner_entities?.organizations?.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {results.ner_entities.organizations.map((org, index) => (
                       <ResultBadge key={index} variant="success">{org}</ResultBadge>
@@ -496,6 +558,87 @@ function ResultsPage() {
             </div>
           </ResultCard>
         </div>
+
+        {/* -------------------------------------------------------------------
+         * Deep Scan: Exposed PII
+         * ------------------------------------------------------------------- */}
+        {isDeepScan && results.backendAnalysis?.exposed_pii && (
+          <div className="mb-8">
+            <ResultCard
+              title="Exposed Personal Information"
+              subtitle="PII found across platforms"
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              }
+            >
+              {Object.entries(results.backendAnalysis.exposed_pii).map(([severity, items]) => (
+                <div key={severity} className="mb-4">
+                  <h4 className="font-semibold text-sm mb-2 capitalize">{severity} Risk</h4>
+                  <div className="space-y-2">
+                    {items.map((item, idx) => (
+                      <div key={idx} className="p-3 bg-gray-50 rounded-lg">
+                        <p className="font-medium">{item.pii_label}: {item.exposed_value}</p>
+                        <p className="text-xs text-gray-600 mt-1">
+                          Found on: {item.found_on?.join(', ')}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </ResultCard>
+          </div>
+        )}
+
+        {/* -------------------------------------------------------------------
+         * Deep Scan: Impersonation Risks
+         * ------------------------------------------------------------------- */}
+        {isDeepScan && results.backendAnalysis?.impersonation_risks?.length > 0 && (
+          <div className="mb-8">
+            <ResultCard
+              title="Impersonation Risks"
+              subtitle="Potential impersonation attempts detected"
+              icon={
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              }
+            >
+              {results.backendAnalysis.impersonation_risks.map((risk, idx) => (
+                <div key={idx} className={`p-4 rounded-lg mb-3 ${
+                  risk.risk_level === 'critical' ? 'bg-red-50 border-l-4 border-red-500' :
+                  risk.risk_level === 'high' ? 'bg-orange-50 border-l-4 border-orange-500' :
+                  'bg-yellow-50 border-l-4 border-yellow-500'
+                }`}>
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-semibold">{risk.platform}</h4>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      risk.risk_level === 'critical' ? 'bg-red-200 text-red-800' :
+                      risk.risk_level === 'high' ? 'bg-orange-200 text-orange-800' :
+                      'bg-yellow-200 text-yellow-800'
+                    }`}>
+                      {risk.risk_level}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700 mb-2">{risk.profile_name}</p>
+                  <p className="text-xs text-gray-600">{risk.reason}</p>
+                  {risk.profile_url && (
+                    <a 
+                      href={risk.profile_url} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-600 hover:underline mt-2 inline-block"
+                    >
+                      View Profile →
+                    </a>
+                  )}
+                </div>
+              ))}
+            </ResultCard>
+          </div>
+        )}
 
         {/* -------------------------------------------------------------------
          * Recommendations
