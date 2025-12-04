@@ -2449,17 +2449,36 @@ async def deep_scan_analyze(request: DeepScanAnalyzeRequest) -> DeepScanAnalyzeR
                 if isinstance(profile, dict):
                     all_profiles.append(profile)
                     
-                    # Collect extracted PII
+                    # Collect extracted PII with risk levels
                     extracted = profile.get("extractedPII", {})
                     if isinstance(extracted, dict):
                         for pii_type, values in extracted.items():
                             if isinstance(values, list):
                                 for value in values:
+                                    # Determine risk level based on PII type
+                                    risk_level = "low"
+                                    if pii_type in ["emails", "email"]:
+                                        risk_level = "high"
+                                    elif pii_type in ["phones", "phone"]:
+                                        risk_level = "critical"
+                                    elif pii_type in ["addresses", "address"]:
+                                        risk_level = "critical"
+                                    elif pii_type in ["birthDates", "birthdate"]:
+                                        risk_level = "high"
+                                    elif pii_type in ["nationalIds", "national_id"]:
+                                        risk_level = "critical"
+                                    elif pii_type in ["coordinates", "location_coords"]:
+                                        risk_level = "high"
+                                    elif pii_type in ["urls", "mentions"]:
+                                        risk_level = "low"
+                                    
                                     all_pii.append({
                                         "type": pii_type,
                                         "value": value,
                                         "platform": platform_key,
-                                        "source": profile.get("profileUrl", "")
+                                        "platform_name": platform_data.get("platform", platform_key),
+                                        "source": profile.get("profileUrl", ""),
+                                        "risk_level": risk_level
                                     })
                     
                     # Also check direct PII fields
@@ -2468,33 +2487,77 @@ async def deep_scan_analyze(request: DeepScanAnalyzeRequest) -> DeepScanAnalyzeR
                             "type": "email",
                             "value": profile["email"],
                             "platform": platform_key,
-                            "source": profile.get("profileUrl", "")
+                            "platform_name": platform_data.get("platform", platform_key),
+                            "source": profile.get("profileUrl", ""),
+                            "risk_level": "high"
                         })
                     if profile.get("phone"):
                         all_pii.append({
                             "type": "phone",
                             "value": profile["phone"],
                             "platform": platform_key,
-                            "source": profile.get("profileUrl", "")
+                            "platform_name": platform_data.get("platform", platform_key),
+                            "source": profile.get("profileUrl", ""),
+                            "risk_level": "critical"
+                        })
+                    if profile.get("location"):
+                        all_pii.append({
+                            "type": "location",
+                            "value": profile["location"],
+                            "platform": platform_key,
+                            "platform_name": platform_data.get("platform", platform_key),
+                            "source": profile.get("profileUrl", ""),
+                            "risk_level": "medium"
+                        })
+                    if profile.get("bio"):
+                        all_pii.append({
+                            "type": "bio",
+                            "value": profile["bio"][:200],  # Truncate long bios
+                            "platform": platform_key,
+                            "platform_name": platform_data.get("platform", platform_key),
+                            "source": profile.get("profileUrl", ""),
+                            "risk_level": "low"
                         })
         
-        # Deduplicate PII
+        # Deduplicate PII and group by platform
         seen_pii = set()
         unique_pii = []
+        pii_by_platform = {}
+        
         for pii in all_pii:
             key = (pii["type"], pii["value"])
             if key not in seen_pii:
                 seen_pii.add(key)
                 unique_pii.append(pii)
+            
+            # Group PII by platform for detailed reporting
+            platform = pii.get("platform")
+            if platform:
+                if platform not in pii_by_platform:
+                    pii_by_platform[platform] = {
+                        "platform_name": pii.get("platform_name", platform),
+                        "items": []
+                    }
+                if key not in [(p["type"], p["value"]) for p in pii_by_platform[platform]["items"]]:
+                    pii_by_platform[platform]["items"].append(pii)
         
-        # Calculate risk score
+        # Calculate risk score based on PII risk levels
         risk_score = 10  # Base score
         
-        # Add points for exposed PII
-        risk_score += min(len(unique_pii) * 10, 40)
+        # Add points based on PII risk levels
+        risk_weights = {
+            "critical": 15,
+            "high": 10,
+            "medium": 5,
+            "low": 2
+        }
+        
+        for pii in unique_pii:
+            risk_level = pii.get("risk_level", "low")
+            risk_score += risk_weights.get(risk_level, 2)
         
         # Add points for number of profiles found
-        risk_score += min(total_profiles * 5, 30)
+        risk_score += min(total_profiles * 3, 20)
         
         # Add points for platforms with results
         platforms_with_data = sum(
@@ -2535,35 +2598,84 @@ async def deep_scan_analyze(request: DeepScanAnalyzeRequest) -> DeepScanAnalyzeR
                     "reason": "Same username found on multiple platforms"
                 })
         
-        # Generate recommendations
-        recommendations = [
-            "Review privacy settings on all identified social media profiles"
-        ]
+        # Generate recommendations based on findings
+        recommendations = []
         
-        if len(unique_pii) > 0:
+        # Always add basic recommendation
+        if platforms_with_data > 0:
             recommendations.append(
-                f"Found {len(unique_pii)} PII items exposed - review what information is publicly visible"
+                f"Review privacy settings on {platforms_with_data} platform(s) where profiles were found"
             )
         
-        if any(p.get("type") == "email" for p in unique_pii):
+        # PII-specific recommendations
+        pii_types_found = set(p.get("type") for p in unique_pii)
+        
+        if "emails" in pii_types_found or "email" in pii_types_found:
+            email_count = sum(1 for p in unique_pii if p.get("type") in ["emails", "email"])
             recommendations.append(
-                "Email addresses were found - check if they've been in data breaches at haveibeenpwned.com"
+                f"🔴 CRITICAL: {email_count} email address(es) exposed - check if they've been in data breaches at haveibeenpwned.com"
             )
         
-        if any(p.get("type") == "phone" for p in unique_pii):
+        if "phones" in pii_types_found or "phone" in pii_types_found:
+            phone_count = sum(1 for p in unique_pii if p.get("type") in ["phones", "phone"])
             recommendations.append(
-                "Phone numbers were found - consider removing them from public profiles"
+                f"🔴 CRITICAL: {phone_count} phone number(s) exposed - remove from public profiles immediately"
             )
         
+        if "addresses" in pii_types_found or "address" in pii_types_found:
+            recommendations.append(
+                "🔴 CRITICAL: Physical address exposed - remove immediately to prevent privacy risks"
+            )
+        
+        if "nationalIds" in pii_types_found or "national_id" in pii_types_found:
+            recommendations.append(
+                "🔴 CRITICAL: National ID exposed - this could lead to identity theft. Remove immediately!"
+            )
+        
+        if "birthDates" in pii_types_found or "birthdate" in pii_types_found:
+            recommendations.append(
+                "⚠️ HIGH RISK: Birth date exposed - often used for account recovery and verification"
+            )
+        
+        if "coordinates" in pii_types_found:
+            recommendations.append(
+                "⚠️ HIGH RISK: Location coordinates exposed - disable location tagging on posts"
+            )
+        
+        # Risk level recommendations
         if risk_score >= 70:
             recommendations.append(
-                "High exposure detected - enable two-factor authentication on all accounts"
+                "🔴 Enable two-factor authentication (2FA) on all social media accounts immediately"
+            )
+        elif risk_score >= 40:
+            recommendations.append(
+                "⚠️ Enable two-factor authentication (2FA) on all social media accounts for better security"
             )
         
+        # Multiple profiles recommendation
         if total_profiles >= 5:
             recommendations.append(
-                "Multiple profiles found - consider using unique usernames to reduce traceability"
+                "Consider using unique usernames across platforms to reduce cross-platform tracking"
             )
+        
+        # Default recommendation if no PII found
+        if len(unique_pii) == 0:
+            recommendations.append(
+                "✅ No sensitive PII detected in public profiles - maintain good privacy practices"
+            )
+        else:
+            # Summary recommendation
+            critical_count = sum(1 for p in unique_pii if p.get("risk_level") == "critical")
+            high_count = sum(1 for p in unique_pii if p.get("risk_level") == "high")
+            
+            if critical_count > 0:
+                recommendations.insert(0, 
+                    f"🚨 URGENT: {critical_count} critical PII item(s) exposed - take action immediately!"
+                )
+            elif high_count > 0:
+                recommendations.insert(0,
+                    f"Found {len(unique_pii)} PII item(s) including {high_count} high-risk item(s) - review and secure"
+                )
         
         # Generate report ID for PDF if requested
         report_id = None
@@ -2582,6 +2694,7 @@ async def deep_scan_analyze(request: DeepScanAnalyzeRequest) -> DeepScanAnalyzeR
                 "risk_score": risk_score,
                 "risk_level": risk_level,
                 "exposed_pii": unique_pii,
+                "pii_by_platform": pii_by_platform,
                 "platform_summary": platform_summary,
                 "recommendations": recommendations,
                 "generated_at": datetime.utcnow().isoformat()
@@ -2602,6 +2715,7 @@ async def deep_scan_analyze(request: DeepScanAnalyzeRequest) -> DeepScanAnalyzeR
             risk_score=risk_score,
             risk_level=risk_level,
             exposed_pii=unique_pii,
+            pii_by_platform=pii_by_platform,
             platform_summary=platform_summary,
             impersonation_risks=impersonation_risks,
             recommendations=recommendations,

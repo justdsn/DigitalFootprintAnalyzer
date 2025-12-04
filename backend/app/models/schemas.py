@@ -2304,6 +2304,10 @@ class DeepScanAnalyzeResponse(BaseModel):
         default_factory=list,
         description="List of exposed PII items"
     )
+    pii_by_platform: Optional[Dict[str, Dict[str, Any]]] = Field(
+        default=None,
+        description="PII grouped by platform for detailed reporting"
+    )
     platform_summary: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict,
         description="Summary per platform"
