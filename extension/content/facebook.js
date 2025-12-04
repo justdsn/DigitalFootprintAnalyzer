@@ -9,6 +9,47 @@
   
   const PLATFORM = 'facebook';
   
+  /**
+   * Check if user is authenticated on Facebook
+   * @returns {boolean} True if logged in
+   */
+  function isAuthenticated() {
+    // Check for user menu/profile icon which indicates logged-in state
+    const authIndicators = [
+      '[aria-label*="profile" i]',
+      '[aria-label*="account" i]',
+      '[data-click="profile_icon"]',
+      'div[role="banner"] img[referrerpolicy="origin-when-cross-origin"]', // Profile picture in header
+      'a[href*="/me/"]',
+      'a[href*="/profile.php"]'
+    ];
+    
+    for (const selector of authIndicators) {
+      if (document.querySelector(selector)) {
+        return true;
+      }
+    }
+    
+    // Check if we're on login page (indicates NOT authenticated)
+    if (window.location.pathname.includes('/login')) {
+      return false;
+    }
+    
+    // Additional check: look for common unauthenticated elements
+    const unauthElements = [
+      'form[action*="/login"]',
+      'input[name="email"][placeholder*="Email" i]'
+    ];
+    
+    for (const selector of unauthElements) {
+      if (document.querySelector(selector)) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+  
   // Facebook-specific CSS selectors (may need updates as Facebook changes)
   const SELECTORS = {
     // Search results page
@@ -269,6 +310,19 @@
     if (message.action === 'extractSearchResults') {
       console.log(`[${PLATFORM}] Starting extraction for query:`, message.query);
       
+      // Check authentication before extraction
+      if (!isAuthenticated()) {
+        console.log(`[${PLATFORM}] User is not authenticated`);
+        sendToBackground('authenticationRequired', {
+          platform: PLATFORM,
+          platformName: 'Facebook',
+          loginUrl: 'https://www.facebook.com/login',
+          message: 'Please log into Facebook to enable deep scanning'
+        });
+        sendResponse({ success: false, error: 'authentication_required' });
+        return true;
+      }
+      
       const results = extractSearchResults();
       
       console.log(`[${PLATFORM}] Extracted ${results.length} results`);
@@ -283,6 +337,19 @@
     } else if (message.action === 'extractProfileData') {
       console.log(`[${PLATFORM}] Starting profile data extraction`);
       
+      // Check authentication before extraction
+      if (!isAuthenticated()) {
+        console.log(`[${PLATFORM}] User is not authenticated`);
+        sendToBackground('authenticationRequired', {
+          platform: PLATFORM,
+          platformName: 'Facebook',
+          loginUrl: 'https://www.facebook.com/login',
+          message: 'Please log into Facebook to enable deep scanning'
+        });
+        sendResponse({ success: false, error: 'authentication_required' });
+        return true;
+      }
+      
       const profile = extractProfileData();
       
       console.log(`[${PLATFORM}] Profile data extracted`);
@@ -292,14 +359,33 @@
         profile: profile
       });
       sendResponse({ success: true });
+    } else if (message.action === 'checkAuthentication') {
+      const authenticated = isAuthenticated();
+      sendResponse({ 
+        success: true, 
+        authenticated: authenticated,
+        loginUrl: authenticated ? null : 'https://www.facebook.com/login'
+      });
     }
     return true;
   });
   
+  // Send content script readiness signal
+  setTimeout(() => {
+    const authenticated = isAuthenticated();
+    sendToBackground('contentScriptReady', {
+      platform: PLATFORM,
+      platformName: 'Facebook',
+      authenticated: authenticated,
+      url: window.location.href,
+      loginUrl: authenticated ? null : 'https://www.facebook.com/login'
+    });
+  }, 1000);
+  
   // Auto-extract on page load if on search or profile page
   if (document.readyState === 'complete') {
     setTimeout(() => {
-      if (isSearchPage()) {
+      if (isSearchPage() && isAuthenticated()) {
         const results = extractSearchResults();
         if (results.length > 0) {
           sendToBackground('searchResultsExtracted', {
@@ -308,7 +394,7 @@
             url: window.location.href
           });
         }
-      } else if (isProfilePage()) {
+      } else if (isProfilePage() && isAuthenticated()) {
         const profile = extractProfileData();
         sendToBackground('profileDataExtracted', {
           platform: PLATFORM,

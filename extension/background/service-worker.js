@@ -38,6 +38,23 @@ const SUPPORTED_PLATFORMS = {
   }
 };
 
+// Configuration constants
+const SCAN_CONFIG = {
+  MAX_RETRIES: 2,
+  RETRY_DELAYS: [3000, 6000], // Exponential backoff: 3s, 6s
+  PAGE_LOAD_TIMEOUT: 20000,
+  PLATFORM_EXTRACTION_TIMEOUT: 20000,
+  CONTENT_SCRIPT_WAIT: 2000
+};
+
+// Error type constants
+const ERROR_TYPES = {
+  AUTH_REQUIRED: 'auth_required',
+  TIMEOUT: 'timeout',
+  BLOCKED: 'blocked',
+  EXTRACTION_FAILED: 'extraction_failed'
+};
+
 // Scan state management
 let currentScan = null;
 let scanResults = {};
@@ -136,6 +153,12 @@ async function handleMessage(message, sender) {
     
     case 'searchResultsExtracted':
       return handleSearchResults(message.data, sender);
+    
+    case 'authenticationRequired':
+      return handleAuthenticationRequired(message.data, sender);
+    
+    case 'contentScriptReady':
+      return handleContentScriptReady(message.data, sender);
     
     case 'getApiUrl':
       return { success: true, url: await getApiUrl() };
@@ -257,12 +280,13 @@ async function startDeepScan(data) {
  * @param {string} platform - Platform key
  * @param {string} identifier - Value to search
  * @param {string} identifierType - Type of identifier
+ * @param {number} retryCount - Current retry attempt (default 0)
  */
-async function scanPlatform(platform, identifier, identifierType) {
+async function scanPlatform(platform, identifier, identifierType, retryCount = 0) {
   const platformConfig = SUPPORTED_PLATFORMS[platform];
   if (!platformConfig) return;
   
-  console.log(`[Scan] Starting scan for ${platform} with identifier: ${identifier}`);
+  console.log(`[Scan] Starting scan for ${platform} with identifier: ${identifier} (attempt ${retryCount + 1})`);
   
   // Build search query based on identifier type
   let searchQuery = identifier;
@@ -272,72 +296,181 @@ async function scanPlatform(platform, identifier, identifierType) {
   }
   // Note: Names will be URL-encoded when building the search URL
   
-  // Initialize platform results
-  scanResults[platform] = {
-    platform: platformConfig.name,
-    emoji: platformConfig.emoji,
-    status: 'scanning',
-    profiles: [],
-    searchResults: [],
-    errors: [],
-    startTime: Date.now()
-  };
-  
-  // Notify web app that platform scan started
-  notifyWebApp('platformStarted', {
-    platform: platformConfig.name,
-    platformKey: platform,
-    emoji: platformConfig.emoji
-  });
-  
-  // Notify popup about platform scan start
-  notifyPopup('platformScanStarted', {
-    platform,
-    platformName: platformConfig.name,
-    emoji: platformConfig.emoji
-  });
+  // Initialize platform results (if first attempt)
+  if (retryCount === 0) {
+    scanResults[platform] = {
+      platform: platformConfig.name,
+      emoji: platformConfig.emoji,
+      status: 'scanning',
+      profiles: [],
+      searchResults: [],
+      errors: [],
+      startTime: Date.now()
+    };
+    
+    // Notify web app that platform scan started
+    notifyWebApp('platformStarted', {
+      platform: platformConfig.name,
+      platformKey: platform,
+      emoji: platformConfig.emoji
+    });
+    
+    // Notify popup about platform scan start
+    notifyPopup('platformScanStarted', {
+      platform,
+      platformName: platformConfig.name,
+      emoji: platformConfig.emoji
+    });
+  }
   
   let tab = null;
   
   try {
-    // ✅ FIX: Always create a new tab with the search URL
-    const searchUrl = platformConfig.searchUrlPattern + encodeURIComponent(searchQuery);
-    console.log(`[Scan] Opening tab for ${platform}: ${searchUrl}`);
+    // Determine URL and navigation strategy based on platform
+    let targetUrl;
+    let needsInteractiveSearch = false;
+    
+    if (platform === 'instagram') {
+      // Instagram requires interactive search
+      targetUrl = 'https://www.instagram.com/';
+      needsInteractiveSearch = true;
+    } else {
+      // Other platforms support direct search URLs
+      targetUrl = platformConfig.searchUrlPattern + encodeURIComponent(searchQuery);
+    }
+    
+    console.log(`[Scan] Opening tab for ${platform}: ${targetUrl}`);
     
     // Create new tab in background (not active)
     tab = await chrome.tabs.create({ 
-      url: searchUrl, 
+      url: targetUrl, 
       active: false 
     });
     
     console.log(`[Scan] Tab created for ${platform}, ID: ${tab.id}`);
     
-    // Wait for page to load (give content script time to inject)
-    // Note: A fixed 5-second delay is used for simplicity. While not ideal for all network
-    // conditions, it provides a good balance between reliability and scan speed.
-    // A more sophisticated approach would use chrome.tabs.onUpdated or content script readiness checks.
-    await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds for page load
+    // Wait for page to load using tab listener
+    const pageLoaded = await waitForTabLoad(tab.id, SCAN_CONFIG.PAGE_LOAD_TIMEOUT);
     
-    // Send message to content script to extract results
-    try {
-      console.log(`[Scan] Sending extraction message to tab ${tab.id}`);
-      await chrome.tabs.sendMessage(tab.id, {
-        action: 'extractSearchResults',
-        query: identifier,
-        identifierType
-      });
-    } catch (msgError) {
-      console.error(`[Scan] Failed to send message to ${platform} tab:`, msgError);
-      scanResults[platform].errors.push(`Failed to communicate with tab: ${msgError.message}`);
+    if (!pageLoaded) {
+      throw new Error('Page load timeout');
     }
     
-    // Wait for content script to extract and send results (max 20 seconds per platform)
-    await waitForPlatformResults(platform, 20000);
+    // Additional wait for content script injection
+    await new Promise(resolve => setTimeout(resolve, SCAN_CONFIG.CONTENT_SCRIPT_WAIT));
+    
+    // Check authentication status
+    try {
+      const authCheck = await chrome.tabs.sendMessage(tab.id, {
+        action: 'checkAuthentication'
+      });
+      
+      if (!authCheck.authenticated) {
+        const errorData = {
+          error_type: ERROR_TYPES.AUTH_REQUIRED,
+          message: `You are not logged into ${platformConfig.name}`,
+          suggestion: `Please log into ${platformConfig.name} and try again`,
+          loginUrl: authCheck.loginUrl || platformConfig.searchUrlPattern.split('/search')[0]
+        };
+        
+        scanResults[platform].status = ERROR_TYPES.AUTH_REQUIRED;
+        scanResults[platform].errors.push(errorData);
+        
+        console.log(`[Scan] Authentication required for ${platform}`);
+        return; // Don't retry auth errors
+      }
+    } catch (authError) {
+      console.warn(`[Scan] Could not check authentication for ${platform}:`, authError);
+      // Continue anyway - might still work
+    }
+    
+    // Handle Instagram's interactive search
+    if (needsInteractiveSearch) {
+      try {
+        console.log(`[Scan] Performing interactive search on ${platform}`);
+        await chrome.tabs.sendMessage(tab.id, {
+          action: 'performSearch',
+          query: searchQuery
+        });
+        
+        // Wait for search to complete
+        await new Promise(resolve => setTimeout(resolve, 3000));
+      } catch (searchError) {
+        console.error(`[Scan] Interactive search failed for ${platform}:`, searchError);
+        throw new Error(`Interactive search failed: ${searchError.message}`);
+      }
+    } else {
+      // Send message to content script to extract results
+      try {
+        console.log(`[Scan] Sending extraction message to tab ${tab.id}`);
+        await chrome.tabs.sendMessage(tab.id, {
+          action: 'extractSearchResults',
+          query: identifier,
+          identifierType
+        });
+      } catch (msgError) {
+        console.error(`[Scan] Failed to send message to ${platform} tab:`, msgError);
+        throw new Error(`Failed to communicate with content script: ${msgError.message}`);
+      }
+    }
+    
+    // Wait for content script to extract and send results
+    await waitForPlatformResults(platform, SCAN_CONFIG.PLATFORM_EXTRACTION_TIMEOUT);
+    
+    // Check if extraction was successful
+    const hasAuthError = scanResults[platform].errors.some(e => 
+      typeof e === 'object' && e.error_type === ERROR_TYPES.AUTH_REQUIRED
+    );
+    
+    if (hasAuthError) {
+      // Don't retry auth errors - user needs to log in
+      return;
+    }
+    
+    // Check if we have retryable errors
+    const hasRetryableError = scanResults[platform].errors.some(e => 
+      typeof e === 'object' && 
+      (e.error_type === ERROR_TYPES.EXTRACTION_FAILED || e.error_type === ERROR_TYPES.TIMEOUT)
+    );
+    
+    if (scanResults[platform].status === 'timeout' || 
+        (hasRetryableError && retryCount < SCAN_CONFIG.MAX_RETRIES)) {
+      throw new Error('Extraction failed or timed out');
+    }
     
   } catch (error) {
-    console.error(`[Scan] Error scanning ${platform}:`, error);
-    scanResults[platform].status = 'error';
-    scanResults[platform].errors.push(error.message);
+    console.error(`[Scan] Error scanning ${platform} (attempt ${retryCount + 1}):`, error);
+    
+    const errorData = {
+      error_type: ERROR_TYPES.EXTRACTION_FAILED,
+      message: `Failed to scan ${platformConfig.name}: ${error.message}`,
+      suggestion: 'Please check your internet connection and try again'
+    };
+    
+    // Retry logic
+    if (retryCount < SCAN_CONFIG.MAX_RETRIES && error.message !== 'Page load timeout') {
+      const delay = SCAN_CONFIG.RETRY_DELAYS[retryCount];
+      console.log(`[Scan] Retrying ${platform} in ${delay}ms...`);
+      
+      // Close the current tab
+      if (tab && tab.id) {
+        try {
+          await chrome.tabs.remove(tab.id);
+        } catch (closeError) {
+          console.warn(`[Scan] Could not close tab for retry:`, closeError);
+        }
+      }
+      
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      // Retry the scan
+      return await scanPlatform(platform, identifier, identifierType, retryCount + 1);
+    } else {
+      // Max retries reached or non-retryable error
+      scanResults[platform].status = 'error';
+      scanResults[platform].errors.push(errorData);
+    }
   } finally {
     // Always close the tab after extraction, even if there was an error
     if (tab && tab.id) {
@@ -366,7 +499,8 @@ async function scanPlatform(platform, identifier, identifierType) {
     emoji: platformConfig.emoji,
     count: scanResults[platform].profiles.length + scanResults[platform].searchResults.length,
     duration: scanResults[platform].duration,
-    status: scanResults[platform].status
+    status: scanResults[platform].status,
+    errors: scanResults[platform].errors
   });
   
   // Notify popup about platform scan completion
@@ -376,10 +510,66 @@ async function scanPlatform(platform, identifier, identifierType) {
     emoji: platformConfig.emoji,
     status: scanResults[platform].status,
     profilesFound: scanResults[platform].profiles.length,
-    searchResultsFound: scanResults[platform].searchResults.length
+    searchResultsFound: scanResults[platform].searchResults.length,
+    errors: scanResults[platform].errors
   });
   
   console.log(`[Scan] Completed ${platform} scan in ${scanResults[platform].duration}ms`);
+}
+
+/**
+ * Wait for tab to complete loading
+ * @param {number} tabId - Tab ID
+ * @param {number} timeout - Maximum wait time in ms
+ * @returns {Promise<boolean>} True if loaded, false if timeout
+ */
+function waitForTabLoad(tabId, timeout = 20000) {
+  return new Promise((resolve) => {
+    const startTime = Date.now();
+    let isResolved = false;
+    
+    const listener = (updatedTabId, changeInfo, tab) => {
+      if (updatedTabId === tabId && changeInfo.status === 'complete') {
+        if (!isResolved) {
+          isResolved = true;
+          chrome.tabs.onUpdated.removeListener(listener);
+          console.log(`[Scan] Tab ${tabId} loaded successfully`);
+          resolve(true);
+        }
+      }
+    };
+    
+    chrome.tabs.onUpdated.addListener(listener);
+    
+    // Timeout fallback
+    setTimeout(() => {
+      if (!isResolved) {
+        isResolved = true;
+        chrome.tabs.onUpdated.removeListener(listener);
+        console.warn(`[Scan] Tab ${tabId} load timeout after ${timeout}ms`);
+        resolve(false);
+      }
+    }, timeout);
+    
+    // Also check if tab is already complete
+    chrome.tabs.get(tabId, (tab) => {
+      if (chrome.runtime.lastError) {
+        if (!isResolved) {
+          isResolved = true;
+          chrome.tabs.onUpdated.removeListener(listener);
+          resolve(false);
+        }
+        return;
+      }
+      
+      if (tab.status === 'complete' && !isResolved) {
+        isResolved = true;
+        chrome.tabs.onUpdated.removeListener(listener);
+        console.log(`[Scan] Tab ${tabId} was already loaded`);
+        resolve(true);
+      }
+    });
+  });
 }
 
 /**
@@ -455,6 +645,57 @@ function handleSearchResults(data, sender) {
   
   scanResults[platform].searchResults = results;
   scanResults[platform].status = 'completed';
+  
+  return { success: true };
+}
+
+/**
+ * Handle authentication required notification from content scripts
+ */
+function handleAuthenticationRequired(data, sender) {
+  const { platform, platformName, loginUrl, message } = data;
+  
+  console.log(`[Auth] Authentication required for ${platformName}`);
+  
+  if (scanResults[platform]) {
+    scanResults[platform].status = 'auth_required';
+    scanResults[platform].errors.push({
+      error_type: 'auth_required',
+      message: message || `Please log into ${platformName}`,
+      suggestion: `Click here to log in to ${platformName}`,
+      loginUrl: loginUrl
+    });
+  }
+  
+  // Notify popup and web app
+  notifyPopup('authenticationRequired', {
+    platform,
+    platformName,
+    loginUrl,
+    message
+  });
+  
+  notifyWebApp('authenticationRequired', {
+    platform,
+    platformName,
+    loginUrl,
+    message
+  });
+  
+  return { success: true };
+}
+
+/**
+ * Handle content script readiness signal
+ */
+function handleContentScriptReady(data, sender) {
+  const { platform, platformName, authenticated, url, loginUrl } = data;
+  
+  console.log(`[ContentScript] ${platformName} content script ready. Authenticated: ${authenticated}`);
+  
+  if (!authenticated && loginUrl) {
+    console.log(`[ContentScript] ${platformName} requires authentication: ${loginUrl}`);
+  }
   
   return { success: true };
 }

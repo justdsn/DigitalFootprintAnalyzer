@@ -195,30 +195,50 @@ function extractPII(text) {
     emails: [],
     phones: [],
     urls: [],
-    mentions: []
+    mentions: [],
+    addresses: [],
+    birthDates: [],
+    nationalIds: [],
+    coordinates: []
   };
   
   if (!text) return pii;
   
-  // Extract emails
-  const emailRegex = /[\w.-]+@[\w.-]+\.\w+/g;
+  // Extract emails - RFC 5322 compliant pattern
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
   const emails = text.match(emailRegex);
   if (emails) {
     pii.emails = [...new Set(emails)];
   }
   
-  // Extract phone numbers (Sri Lankan and international)
-  const phoneRegex = /(?:\+94|0)?7[0-9]{8}|(?:\+94|0)?[1-9][0-9]{7}|\+[1-9]\d{6,14}/g;
-  const phones = text.match(phoneRegex);
-  if (phones) {
-    pii.phones = [...new Set(phones)];
-  }
+  // Extract phone numbers (Sri Lankan and international formats)
+  // Sri Lankan mobile: 07X-XXXXXXX, +947XXXXXXXX
+  // Sri Lankan landline: 011XXXXXXX, +9411XXXXXXX (fixed digit count)
+  // International: +[country code][number]
+  const phonePatterns = [
+    /\+94\s?7[0-9]{8}/g,      // Sri Lankan international mobile format (+947XXXXXXXX)
+    /\+94\s?[1-9][1-9]\d{7}/g, // Sri Lankan international landline format
+    /\b07[0-9]{8}\b/g,         // Sri Lankan local mobile format (07XXXXXXXX)
+    /\b0[1-9][1-9]\d{7}\b/g,   // Sri Lankan landline (011XXXXXXX, etc.)
+    /\+[1-9]\d{1,3}\s?\d{6,14}/g // International format (other countries)
+  ];
   
-  // Extract URLs
-  const urlRegex = /https?:\/\/[^\s<>"']+/g;
+  const phonesSet = new Set();
+  phonePatterns.forEach(pattern => {
+    const matches = text.match(pattern);
+    if (matches) {
+      matches.forEach(phone => phonesSet.add(phone));
+    }
+  });
+  pii.phones = [...phonesSet];
+  
+  // Extract URLs (exclude parentheses to avoid issues with markdown/formatting)
+  const urlRegex = /https?:\/\/[^\s<>"'\(\)]+/g;
   const urls = text.match(urlRegex);
   if (urls) {
-    pii.urls = [...new Set(urls)];
+    // Clean up URLs that may have captured trailing punctuation
+    const cleanUrls = urls.map(url => url.replace(/[.,;:!?]+$/, ''));
+    pii.urls = [...new Set(cleanUrls)];
   }
   
   // Extract mentions
@@ -227,6 +247,85 @@ function extractPII(text) {
   if (mentions) {
     pii.mentions = [...new Set(mentions)];
   }
+  
+  // Extract addresses (with city/country patterns)
+  // Look for addresses with Sri Lankan cities or street patterns
+  const addressPatterns = [
+    /\d+[A-Za-z]?\s+[A-Za-z\s]+(?:Street|St|Road|Rd|Avenue|Ave|Lane|Ln|Drive|Dr)[,\s]+[A-Za-z\s]+/gi,
+    /(?:Colombo|Kandy|Galle|Jaffna|Negombo|Kurunegala|Anuradhapura|Trincomalee|Batticaloa|Matara|Ratnapura|Badulla|Nuwara Eliya|Hambantota|Vavuniya|Kilinochchi|Mannar|Mullaitivu|Polonnaruwa|Puttalam|Kegalle|Monaragala|Ampara|Kalutara|Gampaha)\s*\d*[,\s]*(?:Sri Lanka)?/gi
+  ];
+  
+  const addressesSet = new Set();
+  addressPatterns.forEach(pattern => {
+    const matches = text.match(pattern);
+    if (matches) {
+      matches.forEach(addr => addressesSet.add(addr.trim()));
+    }
+  });
+  pii.addresses = [...addressesSet];
+  
+  // Extract birth dates (various formats)
+  // Formats: DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD, Month DD, YYYY
+  const birthDatePatterns = [
+    /\b(?:0?[1-9]|[12][0-9]|3[01])[\/\-](?:0?[1-9]|1[0-2])[\/\-](?:19|20)\d{2}\b/g,  // DD/MM/YYYY or DD-MM-YYYY
+    /\b(?:19|20)\d{2}[\/\-](?:0?[1-9]|1[0-2])[\/\-](?:0?[1-9]|[12][0-9]|3[01])\b/g,  // YYYY-MM-DD
+    /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(?:0?[1-9]|[12][0-9]|3[01]),?\s+(?:19|20)\d{2}\b/gi,  // Month DD, YYYY
+    /\b(?:Born|DOB|Date of Birth)[\s:]+(?:0?[1-9]|[12][0-9]|3[01])[\/\-](?:0?[1-9]|1[0-2])[\/\-](?:19|20)\d{2}\b/gi  // With "Born" or "DOB" prefix
+  ];
+  
+  const birthDatesSet = new Set();
+  birthDatePatterns.forEach(pattern => {
+    const matches = text.match(pattern);
+    if (matches) {
+      matches.forEach(date => birthDatesSet.add(date.trim()));
+    }
+  });
+  pii.birthDates = [...birthDatesSet];
+  
+  // Extract Sri Lankan National ID patterns
+  // Old format: 9 digits + V/X (e.g., 123456789V)
+  // New format: 12 digits starting with year of birth (e.g., 199912345678)
+  // Year range: 1920-current year for reasonable validation
+  const NIC_MIN_BIRTH_YEAR = 1920;
+  const currentYear = new Date().getFullYear();
+  
+  // Build year pattern: matches years from 1920 to current year
+  // Example: if current year is 2024, matches 1920-1999 and 2000-2024
+  const startDecade = Math.floor((NIC_MIN_BIRTH_YEAR % 100) / 10); // For 1920: 2
+  const endDecade = Math.floor((currentYear % 100) / 10);  // For 2024: 2
+  const yearPattern = `19[${startDecade}-9]\\d|20[0-${endDecade}]\\d`;
+  
+  const nicPatterns = [
+    /\b\d{9}[VvXx]\b/g,                              // Old NIC format (9 digits + V/X)
+    new RegExp(`\\b(?:${yearPattern})\\d{8}\\b`, 'g') // New NIC format (12 digits total)
+  ];
+  
+  const nicsSet = new Set();
+  nicPatterns.forEach(pattern => {
+    const matches = text.match(pattern);
+    if (matches) {
+      matches.forEach(nic => nicsSet.add(nic));
+    }
+  });
+  pii.nationalIds = [...nicsSet];
+  
+  // Extract location coordinates (latitude, longitude)
+  // Formats: lat,lng or lat, lng or (lat, lng)
+  // Latitude: -90 to 90, Longitude: -180 to 180
+  // Simplified pattern that catches most coordinates; false positives filtered by context
+  const coordPatterns = [
+    /[-+]?(?:[0-8]?\d(?:\.\d+)?|90(?:\.0+)?)\s*,\s*[-+]?(?:1[0-7]\d(?:\.\d+)?|180(?:\.0+)?|[0-9](?:\.\d+)?)/g,
+    /\([-+]?(?:[0-8]?\d(?:\.\d+)?|90(?:\.0+)?)\s*,\s*[-+]?(?:1[0-7]\d(?:\.\d+)?|180(?:\.0+)?|[0-9](?:\.\d+)?)\)/g
+  ];
+  
+  const coordsSet = new Set();
+  coordPatterns.forEach(pattern => {
+    const matches = text.match(pattern);
+    if (matches) {
+      matches.forEach(coord => coordsSet.add(coord.trim()));
+    }
+  });
+  pii.coordinates = [...coordsSet];
   
   return pii;
 }

@@ -9,6 +9,57 @@
   
   const PLATFORM = 'x';
   
+  /**
+   * Check if user is authenticated on X/Twitter
+   * @returns {boolean} True if logged in
+   */
+  function isAuthenticated() {
+    // Check for user profile elements that indicate logged-in state
+    const authIndicators = [
+      'a[data-testid="AppTabBar_Profile_Link"]',
+      'a[href="/home"]',
+      'a[href="/compose/tweet"]',
+      'button[data-testid="SideNav_NewTweet_Button"]',
+      '[data-testid="primaryColumn"]',
+      'nav a[aria-label*="Profile" i]'
+    ];
+    
+    for (const selector of authIndicators) {
+      if (document.querySelector(selector)) {
+        return true;
+      }
+    }
+    
+    // Check if we're on login/signup page (indicates NOT authenticated)
+    const unauthPaths = ['/login', '/i/flow/login', '/i/flow/signup'];
+    if (unauthPaths.some(path => window.location.pathname.includes(path))) {
+      return false;
+    }
+    
+    // Additional check: look for common unauthenticated elements
+    const unauthElements = [
+      'input[name="text"][autocomplete="username"]',
+      'input[name="password"]',
+      'div[data-testid="login"]'
+    ];
+    
+    for (const selector of unauthElements) {
+      if (document.querySelector(selector)) {
+        return false;
+      }
+    }
+    
+    // Check for "Sign in to X" text in spans
+    const spans = document.querySelectorAll('span');
+    for (const span of spans) {
+      if (span.textContent.toLowerCase().includes('sign in to x')) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+  
   // X/Twitter-specific CSS selectors
   const SELECTORS = {
     // Search results page
@@ -296,6 +347,19 @@
     if (message.action === 'extractSearchResults') {
       console.log(`[${PLATFORM}] Starting extraction for query:`, message.query);
       
+      // Check authentication before extraction
+      if (!isAuthenticated()) {
+        console.log(`[${PLATFORM}] User is not authenticated`);
+        sendToBackground('authenticationRequired', {
+          platform: PLATFORM,
+          platformName: 'X (Twitter)',
+          loginUrl: 'https://x.com/i/flow/login',
+          message: 'Please log into X (Twitter) to enable deep scanning'
+        });
+        sendResponse({ success: false, error: 'authentication_required' });
+        return true;
+      }
+      
       const results = extractSearchResults();
       
       console.log(`[${PLATFORM}] Extracted ${results.length} results`);
@@ -310,6 +374,19 @@
     } else if (message.action === 'extractProfileData') {
       console.log(`[${PLATFORM}] Starting profile data extraction`);
       
+      // Check authentication before extraction
+      if (!isAuthenticated()) {
+        console.log(`[${PLATFORM}] User is not authenticated`);
+        sendToBackground('authenticationRequired', {
+          platform: PLATFORM,
+          platformName: 'X (Twitter)',
+          loginUrl: 'https://x.com/i/flow/login',
+          message: 'Please log into X (Twitter) to enable deep scanning'
+        });
+        sendResponse({ success: false, error: 'authentication_required' });
+        return true;
+      }
+      
       const profile = extractProfileData();
       
       console.log(`[${PLATFORM}] Profile data extracted`);
@@ -319,14 +396,33 @@
         profile: profile
       });
       sendResponse({ success: true });
+    } else if (message.action === 'checkAuthentication') {
+      const authenticated = isAuthenticated();
+      sendResponse({ 
+        success: true, 
+        authenticated: authenticated,
+        loginUrl: authenticated ? null : 'https://x.com/i/flow/login'
+      });
     }
     return true;
   });
   
+  // Send content script readiness signal
+  setTimeout(() => {
+    const authenticated = isAuthenticated();
+    sendToBackground('contentScriptReady', {
+      platform: PLATFORM,
+      platformName: 'X (Twitter)',
+      authenticated: authenticated,
+      url: window.location.href,
+      loginUrl: authenticated ? null : 'https://x.com/i/flow/login'
+    });
+  }, 1000);
+  
   // Auto-extract on page load
   if (document.readyState === 'complete') {
     setTimeout(() => {
-      if (isSearchPage()) {
+      if (isSearchPage() && isAuthenticated()) {
         const results = extractSearchResults();
         if (results.length > 0) {
           sendToBackground('searchResultsExtracted', {
@@ -335,7 +431,7 @@
             url: window.location.href
           });
         }
-      } else if (isProfilePage()) {
+      } else if (isProfilePage() && isAuthenticated()) {
         const profile = extractProfileData();
         sendToBackground('profileDataExtracted', {
           platform: PLATFORM,

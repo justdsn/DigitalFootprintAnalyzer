@@ -9,6 +9,56 @@
   
   const PLATFORM = 'instagram';
   
+  /**
+   * Check if user is authenticated on Instagram
+   * @returns {boolean} True if logged in
+   */
+  function isAuthenticated() {
+    // Check for logged-in navigation elements
+    const authIndicators = [
+      'svg[aria-label="Home" i]',
+      'svg[aria-label="New post" i]',
+      'a[href*="/direct/"]',  // Direct messages
+      'a[href="/"]>svg[aria-label="Home"]',
+      'nav a[href*="/accounts/activity/"]',  // Activity link
+      'img[alt*="profile picture" i]'
+    ];
+    
+    for (const selector of authIndicators) {
+      if (document.querySelector(selector)) {
+        return true;
+      }
+    }
+    
+    // Check if we're on login page (indicates NOT authenticated)
+    if (window.location.pathname.includes('/accounts/login')) {
+      return false;
+    }
+    
+    // Additional check: look for common unauthenticated elements
+    const unauthElements = [
+      'input[name="username"]',
+      'form[action*="/accounts/login/"]'
+    ];
+    
+    for (const selector of unauthElements) {
+      const el = document.querySelector(selector);
+      if (el && el.offsetParent !== null) { // Check if visible
+        return false;
+      }
+    }
+    
+    // Check for login button text
+    const buttons = document.querySelectorAll('button[type="submit"]');
+    for (const button of buttons) {
+      if (button.textContent.toLowerCase().includes('log in')) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+  
   // Instagram-specific CSS selectors
   const SELECTORS = {
     // Search results (in search dropdown)
@@ -269,6 +319,19 @@
     if (message.action === 'extractSearchResults') {
       console.log(`[${PLATFORM}] Starting extraction for query:`, message.query);
       
+      // Check authentication before extraction
+      if (!isAuthenticated()) {
+        console.log(`[${PLATFORM}] User is not authenticated`);
+        sendToBackground('authenticationRequired', {
+          platform: PLATFORM,
+          platformName: 'Instagram',
+          loginUrl: 'https://www.instagram.com/accounts/login/',
+          message: 'Please log into Instagram to enable deep scanning'
+        });
+        sendResponse({ success: false, error: 'authentication_required' });
+        return true;
+      }
+      
       const results = extractSearchResults();
       
       console.log(`[${PLATFORM}] Extracted ${results.length} results`);
@@ -283,6 +346,19 @@
     } else if (message.action === 'extractProfileData') {
       console.log(`[${PLATFORM}] Starting profile data extraction`);
       
+      // Check authentication before extraction
+      if (!isAuthenticated()) {
+        console.log(`[${PLATFORM}] User is not authenticated`);
+        sendToBackground('authenticationRequired', {
+          platform: PLATFORM,
+          platformName: 'Instagram',
+          loginUrl: 'https://www.instagram.com/accounts/login/',
+          message: 'Please log into Instagram to enable deep scanning'
+        });
+        sendResponse({ success: false, error: 'authentication_required' });
+        return true;
+      }
+      
       const profile = extractProfileData();
       
       console.log(`[${PLATFORM}] Profile data extracted`);
@@ -292,14 +368,81 @@
         profile: profile
       });
       sendResponse({ success: true });
+    } else if (message.action === 'checkAuthentication') {
+      const authenticated = isAuthenticated();
+      sendResponse({ 
+        success: true, 
+        authenticated: authenticated,
+        loginUrl: authenticated ? null : 'https://www.instagram.com/accounts/login/'
+      });
+    } else if (message.action === 'performSearch') {
+      // Instagram-specific: programmatically perform search
+      performInstagramSearch(message.query).then(() => {
+        sendResponse({ success: true });
+      }).catch(error => {
+        sendResponse({ success: false, error: error.message });
+      });
+      return true; // Will respond asynchronously
     }
     return true;
   });
   
+  /**
+   * Programmatically perform Instagram search
+   * @param {string} query - Search query
+   */
+  async function performInstagramSearch(query) {
+    console.log(`[${PLATFORM}] Performing search for: ${query}`);
+    
+    // Find search input (reduced timeout for better UX)
+    const searchInput = await waitForElement('input[placeholder*="Search" i]', 5000);
+    if (!searchInput) {
+      throw new Error('Search input not found');
+    }
+    
+    // Click on search input to open search panel
+    searchInput.click();
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Type the query
+    searchInput.value = query;
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    searchInput.dispatchEvent(new Event('change', { bubbles: true }));
+    
+    console.log(`[${PLATFORM}] Search query entered, waiting for results...`);
+    
+    // Wait for search results to appear
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Extract search results
+    const results = extractSearchResults();
+    
+    if (results.length > 0) {
+      sendToBackground('searchResultsExtracted', {
+        platform: PLATFORM,
+        results: results,
+        query: query,
+        url: window.location.href
+      });
+    }
+  }
+  
+  // Send content script readiness signal
+  setTimeout(() => {
+    const authenticated = isAuthenticated();
+    sendToBackground('contentScriptReady', {
+      platform: PLATFORM,
+      platformName: 'Instagram',
+      authenticated: authenticated,
+      url: window.location.href,
+      loginUrl: authenticated ? null : 'https://www.instagram.com/accounts/login/'
+    });
+  }, 1000);
+  
   // Auto-extract on profile page load
   if (document.readyState === 'complete') {
     setTimeout(() => {
-      if (isProfilePage()) {
+      if (isProfilePage() && isAuthenticated()) {
         const profile = extractProfileData();
         sendToBackground('profileDataExtracted', {
           platform: PLATFORM,

@@ -9,6 +9,50 @@
   
   const PLATFORM = 'linkedin';
   
+  /**
+   * Check if user is authenticated on LinkedIn
+   * @returns {boolean} True if logged in
+   */
+  function isAuthenticated() {
+    // Check for authenticated navigation elements
+    const authIndicators = [
+      'nav.global-nav',
+      '.global-nav__me-photo',
+      'img.global-nav__me-photo',
+      'a[href*="/mynetwork/"]',
+      'a[href*="/messaging/"]',
+      'button.global-nav__primary-link-me-menu-trigger',
+      '.feed-identity-module'  // Feed identity card (logged in users)
+    ];
+    
+    for (const selector of authIndicators) {
+      if (document.querySelector(selector)) {
+        return true;
+      }
+    }
+    
+    // Check if we're on login/auth page (indicates NOT authenticated)
+    const unauthPaths = ['/login', '/signup', '/authwall'];
+    if (unauthPaths.some(path => window.location.pathname.includes(path))) {
+      return false;
+    }
+    
+    // Additional check: look for common unauthenticated elements
+    const unauthElements = [
+      'form.login__form',
+      'input[name="session_key"]',
+      'input[name="session_password"]'
+    ];
+    
+    for (const selector of unauthElements) {
+      if (document.querySelector(selector)) {
+        return false;
+      }
+    }
+    
+    return true;
+  }
+  
   // LinkedIn-specific CSS selectors
   const SELECTORS = {
     // Search results page
@@ -288,6 +332,19 @@
     if (message.action === 'extractSearchResults') {
       console.log(`[${PLATFORM}] Starting extraction for query:`, message.query);
       
+      // Check authentication before extraction
+      if (!isAuthenticated()) {
+        console.log(`[${PLATFORM}] User is not authenticated`);
+        sendToBackground('authenticationRequired', {
+          platform: PLATFORM,
+          platformName: 'LinkedIn',
+          loginUrl: 'https://www.linkedin.com/login',
+          message: 'Please log into LinkedIn to enable deep scanning'
+        });
+        sendResponse({ success: false, error: 'authentication_required' });
+        return true;
+      }
+      
       const results = extractSearchResults();
       
       console.log(`[${PLATFORM}] Extracted ${results.length} results`);
@@ -302,6 +359,19 @@
     } else if (message.action === 'extractProfileData') {
       console.log(`[${PLATFORM}] Starting profile data extraction`);
       
+      // Check authentication before extraction
+      if (!isAuthenticated()) {
+        console.log(`[${PLATFORM}] User is not authenticated`);
+        sendToBackground('authenticationRequired', {
+          platform: PLATFORM,
+          platformName: 'LinkedIn',
+          loginUrl: 'https://www.linkedin.com/login',
+          message: 'Please log into LinkedIn to enable deep scanning'
+        });
+        sendResponse({ success: false, error: 'authentication_required' });
+        return true;
+      }
+      
       const profile = extractProfileData();
       
       console.log(`[${PLATFORM}] Profile data extracted`);
@@ -311,14 +381,33 @@
         profile: profile
       });
       sendResponse({ success: true });
+    } else if (message.action === 'checkAuthentication') {
+      const authenticated = isAuthenticated();
+      sendResponse({ 
+        success: true, 
+        authenticated: authenticated,
+        loginUrl: authenticated ? null : 'https://www.linkedin.com/login'
+      });
     }
     return true;
   });
   
+  // Send content script readiness signal
+  setTimeout(() => {
+    const authenticated = isAuthenticated();
+    sendToBackground('contentScriptReady', {
+      platform: PLATFORM,
+      platformName: 'LinkedIn',
+      authenticated: authenticated,
+      url: window.location.href,
+      loginUrl: authenticated ? null : 'https://www.linkedin.com/login'
+    });
+  }, 1000);
+  
   // Auto-extract on page load
   if (document.readyState === 'complete') {
     setTimeout(() => {
-      if (isSearchPage()) {
+      if (isSearchPage() && isAuthenticated()) {
         const results = extractSearchResults();
         if (results.length > 0) {
           sendToBackground('searchResultsExtracted', {
@@ -327,7 +416,7 @@
             url: window.location.href
           });
         }
-      } else if (isProfilePage()) {
+      } else if (isProfilePage() && isAuthenticated()) {
         const profile = extractProfileData();
         sendToBackground('profileDataExtracted', {
           platform: PLATFORM,
