@@ -234,7 +234,9 @@ function extractPII(text) {
   const urlRegex = /https?:\/\/[^\s<>"'\)]+/g;
   const urls = text.match(urlRegex);
   if (urls) {
-    pii.urls = [...new Set(urls)];
+    // Clean up URLs that may have captured trailing punctuation
+    const cleanUrls = urls.map(url => url.replace(/[.,;:!?\)]+$/, ''));
+    pii.urls = [...new Set(cleanUrls)];
   }
   
   // Extract mentions
@@ -280,10 +282,11 @@ function extractPII(text) {
   
   // Extract Sri Lankan National ID patterns
   // Old format: 9 digits + V/X (e.g., 123456789V)
-  // New format: 12 digits (e.g., 199912345678)
+  // New format: 12 digits starting with year of birth (e.g., 199912345678)
+  // Note: This is a simplified pattern. Real validation would check day/month ranges.
   const nicPatterns = [
-    /\b\d{9}[VvXx]\b/g,      // Old NIC format
-    /\b(?:19|20)\d{10}\b/g   // New NIC format
+    /\b\d{9}[VvXx]\b/g,                    // Old NIC format
+    /\b(?:19[3-9]\d|20[0-2]\d)\d{8}\b/g   // New NIC format (birth years 1930-2029)
   ];
   
   const nicsSet = new Set();
@@ -297,9 +300,11 @@ function extractPII(text) {
   
   // Extract location coordinates (latitude, longitude)
   // Formats: lat,lng or lat, lng or (lat, lng)
+  // Latitude: -90 to 90, Longitude: -180 to 180
+  // Note: This is a basic pattern. Full validation would check exact ranges.
   const coordPatterns = [
-    /[-+]?\d{1,2}\.\d+\s*,\s*[-+]?\d{1,3}\.\d+/g,
-    /\([-+]?\d{1,2}\.\d+\s*,\s*[-+]?\d{1,3}\.\d+\)/g
+    /[-+]?(?:[0-8]?\d(?:\.\d+)?|90(?:\.0+)?)\s*,\s*[-+]?(?:1[0-7]\d(?:\.\d+)?|180(?:\.0+)?|\d{1,2}(?:\.\d+)?)/g,
+    /\([-+]?(?:[0-8]?\d(?:\.\d+)?|90(?:\.0+)?)\s*,\s*[-+]?(?:1[0-7]\d(?:\.\d+)?|180(?:\.0+)?|\d{1,2}(?:\.\d+)?)\)/g
   ];
   
   const coordsSet = new Set();

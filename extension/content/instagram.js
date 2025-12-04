@@ -38,13 +38,20 @@
     // Additional check: look for common unauthenticated elements
     const unauthElements = [
       'input[name="username"]',
-      'button[type="submit"]:has-text("Log in")',
       'form[action*="/accounts/login/"]'
     ];
     
     for (const selector of unauthElements) {
       const el = document.querySelector(selector);
       if (el && el.offsetParent !== null) { // Check if visible
+        return false;
+      }
+    }
+    
+    // Check for login button text
+    const buttons = document.querySelectorAll('button[type="submit"]');
+    for (const button of buttons) {
+      if (button.textContent.toLowerCase().includes('log in')) {
         return false;
       }
     }

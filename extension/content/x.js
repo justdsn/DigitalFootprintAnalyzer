@@ -40,12 +40,19 @@
     const unauthElements = [
       'input[name="text"][autocomplete="username"]',
       'input[name="password"]',
-      'div[data-testid="login"]',
-      'span:has-text("Sign in to X")'
+      'div[data-testid="login"]'
     ];
     
     for (const selector of unauthElements) {
       if (document.querySelector(selector)) {
+        return false;
+      }
+    }
+    
+    // Check for "Sign in to X" text in spans
+    const spans = document.querySelectorAll('span');
+    for (const span of spans) {
+      if (span.textContent.toLowerCase().includes('sign in to x')) {
         return false;
       }
     }
