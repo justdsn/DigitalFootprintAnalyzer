@@ -99,9 +99,15 @@ function ImpersonationAlert({
   const [showDetails, setShowDetails] = useState(false);
 
   // ---------------------------------------------------------------------------
+  // Safe Value Extraction
+  // ---------------------------------------------------------------------------
+  const safeScore = typeof score === 'object' ? (score.value || 0) : (score || 0);
+  const safeLevel = typeof level === 'object' ? (level.value || level.level || 'low') : (level || 'low');
+
+  // ---------------------------------------------------------------------------
   // Get risk configuration
   // ---------------------------------------------------------------------------
-  const riskConfig = RISK_LEVELS[level] || RISK_LEVELS.low;
+  const riskConfig = RISK_LEVELS[safeLevel] || RISK_LEVELS.low;
 
   // ---------------------------------------------------------------------------
   // Render Loading State
@@ -133,10 +139,10 @@ function ImpersonationAlert({
             {/* Risk Info */}
             <div>
               <h3 className={`text-lg font-bold ${riskConfig.textColor}`}>
-                {t(`impersonation.${level}`) || riskConfig.label}
+                {t(`impersonation.${safeLevel}`) || riskConfig.label}
               </h3>
               <p className={`text-sm ${riskConfig.textColor} opacity-75`}>
-                {t(`impersonation.${level}Description`) || riskConfig.description}
+                {t(`impersonation.${safeLevel}Description`) || riskConfig.description}
               </p>
             </div>
           </div>
@@ -144,7 +150,7 @@ function ImpersonationAlert({
           {/* Score Badge */}
           <div className="text-right">
             <div className={`text-4xl font-bold ${riskConfig.textColor}`}>
-              {score}
+              {safeScore}
             </div>
             <div className={`text-xs ${riskConfig.textColor} opacity-75`}>
               {t('impersonation.outOf100') || '/ 100'}
@@ -157,7 +163,7 @@ function ImpersonationAlert({
           <div className="h-2 bg-white rounded-full overflow-hidden">
             <div 
               className={`h-full ${riskConfig.progressColor} transition-all duration-500 ease-out`}
-              style={{ width: `${score}%` }}
+              style={{ width: `${safeScore}%` }}
             />
           </div>
           <div className="flex justify-between mt-1 text-xs text-gray-500">
@@ -178,15 +184,18 @@ function ImpersonationAlert({
               <span>{t('impersonation.warningFlags') || 'Warning Flags'}</span>
             </h4>
             <ul className="space-y-2">
-              {flags.map((flag, index) => (
-                <li 
-                  key={index} 
-                  className={`text-sm ${riskConfig.textColor} flex items-start space-x-2`}
-                >
-                  <span className="flex-shrink-0 mt-0.5">•</span>
-                  <span>{flag}</span>
-                </li>
-              ))}
+              {flags.map((flag, index) => {
+                const flagText = typeof flag === 'object' ? (flag.text || flag.value || flag.message || JSON.stringify(flag)) : flag;
+                return (
+                  <li 
+                    key={index} 
+                    className={`text-sm ${riskConfig.textColor} flex items-start space-x-2`}
+                  >
+                    <span className="flex-shrink-0 mt-0.5">•</span>
+                    <span>{flagText}</span>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </div>
@@ -231,17 +240,20 @@ function ImpersonationAlert({
                   <span>{t('impersonation.recommendations') || 'Recommended Actions'}</span>
                 </h4>
                 <ul className="space-y-3">
-                  {recommendations.map((rec, index) => (
-                    <li 
-                      key={index} 
-                      className="flex items-start space-x-3 text-sm text-gray-700"
-                    >
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-medium">
-                        {index + 1}
-                      </span>
-                      <span className="pt-0.5">{rec}</span>
-                    </li>
-                  ))}
+                  {recommendations.map((rec, index) => {
+                    const recText = typeof rec === 'object' ? (rec.text || rec.value || rec.message || JSON.stringify(rec)) : rec;
+                    return (
+                      <li 
+                        key={index} 
+                        className="flex items-start space-x-3 text-sm text-gray-700"
+                      >
+                        <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-medium">
+                          {index + 1}
+                        </span>
+                        <span className="pt-0.5">{recText}</span>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             </div>
@@ -250,7 +262,7 @@ function ImpersonationAlert({
       )}
 
       {/* Quick Action Buttons (for high/critical risk) */}
-      {(level === 'high' || level === 'critical') && (
+      {(safeLevel === 'high' || safeLevel === 'critical') && (
         <div className={`px-4 sm:px-6 pb-4 ${riskConfig.bgColor} flex flex-wrap gap-2`}>
           <button className={`px-4 py-2 rounded-lg bg-white ${riskConfig.textColor} text-sm font-medium hover:shadow-md transition-shadow flex items-center space-x-2`}>
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

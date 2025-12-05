@@ -1793,6 +1793,11 @@ class EnhancedScanRequest(BaseModel):
         description="Location filter for searches",
         examples=["Sri Lanka", "Colombo", "Kandy"]
     )
+    platforms: Optional[List[str]] = Field(
+        default=None,
+        description="List of platforms to scan (facebook, instagram, linkedin, x)",
+        examples=[["facebook", "instagram"]]
+    )
     
     @field_validator("identifier_value")
     @classmethod

@@ -145,20 +145,24 @@ function CorrelationMatrix({
           {t('correlation.profilesAnalyzed') || 'Profiles Analyzed'}
         </p>
         <div className="flex flex-wrap gap-3">
-          {profiles.map((profile, index) => (
-            <div 
-              key={index}
-              className="inline-flex items-center px-4 py-2 bg-gray-50 rounded-lg border border-gray-200"
-            >
-              <span className="text-xl mr-2">{getPlatformIcon(profile.platform)}</span>
-              <div>
-                <p className="text-sm font-medium text-gray-900 capitalize">
-                  {profile.platform}
-                </p>
-                <p className="text-xs text-gray-500">@{profile.username}</p>
+          {profiles.map((profile, index) => {
+            const platformName = typeof profile.platform === 'object' ? (profile.platform.value || profile.platform.name || 'unknown') : (profile.platform || 'unknown');
+            const userName = typeof profile.username === 'object' ? (profile.username.value || profile.username.name || '') : (profile.username || '');
+            return (
+              <div 
+                key={index}
+                className="inline-flex items-center px-4 py-2 bg-gray-50 rounded-lg border border-gray-200"
+              >
+                <span className="text-xl mr-2">{getPlatformIcon(platformName)}</span>
+                <div>
+                  <p className="text-sm font-medium text-gray-900 capitalize">
+                    {platformName}
+                  </p>
+                  <p className="text-xs text-gray-500">@{userName}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -180,50 +184,61 @@ function CorrelationMatrix({
           </div>
           
           <div className="space-y-2">
-            {overlaps.map((overlap, index) => (
-              <div 
-                key={index}
-                className={`p-3 rounded-lg border cursor-pointer transition-all ${getScoreColor(overlap.score)}`}
-                onClick={() => setExpandedItem(expandedItem === `overlap-${index}` ? null : `overlap-${index}`)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-lg font-bold">
-                      {getMatchIcon(overlap.match_type)}
-                    </span>
-                    <div>
-                      <p className="font-medium capitalize">{overlap.field}</p>
-                      <p className="text-xs opacity-75">
-                        {overlap.platforms?.join(' ↔ ')}
-                      </p>
+            {overlaps.map((overlap, index) => {
+              const overlapField = typeof overlap.field === 'object' ? (overlap.field.value || overlap.field.name || 'field') : (overlap.field || 'field');
+              const overlapMatchType = typeof overlap.match_type === 'object' ? (overlap.match_type.value || 'unknown') : (overlap.match_type || 'unknown');
+              const overlapScore = typeof overlap.score === 'object' ? (overlap.score.value || 0) : (overlap.score || 0);
+              const overlapPlatforms = Array.isArray(overlap.platforms) 
+                ? overlap.platforms.map(p => typeof p === 'object' ? (p.value || p.name || '') : p).join(' ↔ ')
+                : '';
+              
+              return (
+                <div 
+                  key={index}
+                  className={`p-3 rounded-lg border cursor-pointer transition-all ${getScoreColor(overlapScore)}`}
+                  onClick={() => setExpandedItem(expandedItem === `overlap-${index}` ? null : `overlap-${index}`)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-lg font-bold">
+                        {getMatchIcon(overlapMatchType)}
+                      </span>
+                      <div>
+                        <p className="font-medium capitalize">{overlapField}</p>
+                        <p className="text-xs opacity-75">
+                          {overlapPlatforms}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-sm font-bold">
+                        {overlapScore?.toFixed(0)}%
+                      </span>
+                      <svg 
+                        className={`w-4 h-4 transform transition-transform ${expandedItem === `overlap-${index}` ? 'rotate-180' : ''}`} 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <span className="text-sm font-bold">
-                      {overlap.score?.toFixed(0)}%
-                    </span>
-                    <svg 
-                      className={`w-4 h-4 transform transition-transform ${expandedItem === `overlap-${index}` ? 'rotate-180' : ''}`} 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
                 
-                {expandedItem === `overlap-${index}` && overlap.values && (
-                  <div className="mt-3 pt-3 border-t border-current border-opacity-20">
-                    <p className="text-xs font-medium mb-2">{t('correlation.values') || 'Values compared:'}</p>
-                    <div className="space-y-1">
-                      {overlap.values.map((value, vIndex) => (
-                        <div key={vIndex} className="text-sm flex items-center space-x-2">
-                          <span className="text-lg">{getPlatformIcon(overlap.platforms?.[vIndex])}</span>
-                          <span className="truncate max-w-xs" title={value}>{value}</span>
-                        </div>
-                      ))}
-                    </div>
+                  {expandedItem === `overlap-${index}` && overlap.values && (
+                    <div className="mt-3 pt-3 border-t border-current border-opacity-20">
+                      <p className="text-xs font-medium mb-2">{t('correlation.values') || 'Values compared:'}</p>
+                      <div className="space-y-1">
+                        {overlap.values.map((value, vIndex) => {
+                          const displayValue = typeof value === 'object' ? (value.value || JSON.stringify(value)) : value;
+                          return (
+                            <div key={vIndex} className="text-sm flex items-center space-x-2">
+                              <span className="text-lg">{getPlatformIcon(overlap.platforms?.[vIndex])}</span>
+                              <span className="truncate max-w-xs" title={displayValue}>{displayValue}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                   </div>
                 )}
               </div>
@@ -250,59 +265,71 @@ function CorrelationMatrix({
           </div>
           
           <div className="space-y-2">
-            {contradictions.map((contradiction, index) => (
-              <div 
-                key={index}
-                className="p-3 rounded-lg border border-red-200 bg-red-50 cursor-pointer transition-all hover:bg-red-100"
-                onClick={() => setExpandedItem(expandedItem === `contradiction-${index}` ? null : `contradiction-${index}`)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-lg font-bold text-red-500">⚠</span>
-                    <div>
-                      <p className="font-medium text-red-800">{contradiction.description}</p>
-                      <p className="text-xs text-red-600">
-                        {contradiction.platforms?.join(' ↔ ')}
-                      </p>
+            {contradictions.map((contradiction, index) => {
+              const contrDesc = typeof contradiction.description === 'object' ? (contradiction.description.value || contradiction.description.text || JSON.stringify(contradiction.description)) : (contradiction.description || '');
+              const contrSeverity = typeof contradiction.severity === 'object' ? (contradiction.severity.value || 'low') : (contradiction.severity || 'low');
+              const contrPlatforms = Array.isArray(contradiction.platforms) 
+                ? contradiction.platforms.map(p => typeof p === 'object' ? (p.value || p.name || '') : p).join(' ↔ ')
+                : '';
+              
+              return (
+                <div 
+                  key={index}
+                  className="p-3 rounded-lg border border-red-200 bg-red-50 cursor-pointer transition-all hover:bg-red-100"
+                  onClick={() => setExpandedItem(expandedItem === `contradiction-${index}` ? null : `contradiction-${index}`)}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-lg font-bold text-red-500">⚠</span>
+                      <div>
+                        <p className="font-medium text-red-800">{contrDesc}</p>
+                        <p className="text-xs text-red-600">
+                          {contrPlatforms}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                        contrSeverity === 'high' 
+                          ? 'bg-red-200 text-red-800' 
+                          : contrSeverity === 'medium'
+                            ? 'bg-orange-200 text-orange-800'
+                            : 'bg-yellow-200 text-yellow-800'
+                      }`}>
+                        {contrSeverity}
+                      </span>
+                      <svg 
+                        className={`w-4 h-4 text-red-500 transform transition-transform ${expandedItem === `contradiction-${index}` ? 'rotate-180' : ''}`} 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                      contradiction.severity === 'high' 
-                        ? 'bg-red-200 text-red-800' 
-                        : contradiction.severity === 'medium'
-                          ? 'bg-orange-200 text-orange-800'
-                          : 'bg-yellow-200 text-yellow-800'
-                    }`}>
-                      {contradiction.severity}
-                    </span>
-                    <svg 
-                      className={`w-4 h-4 text-red-500 transform transition-transform ${expandedItem === `contradiction-${index}` ? 'rotate-180' : ''}`} 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
+                  
+                  {expandedItem === `contradiction-${index}` && contradiction.details && (
+                    <div className="mt-3 pt-3 border-t border-red-200">
+                      <p className="text-xs font-medium text-red-700 mb-2">{t('correlation.details') || 'Details:'}</p>
+                      <div className="text-sm text-red-800 space-y-1">
+                        {Object.entries(contradiction.details).map(([key, value], dIndex) => {
+                          const displayVal = typeof value === 'object' 
+                            ? (value.value || JSON.stringify(value))
+                            : (Array.isArray(value) ? value.join(', ') : String(value));
+                          return (
+                            <div key={dIndex} className="flex">
+                              <span className="font-medium capitalize mr-2">{key.replace(/_/g, ' ')}:</span>
+                              <span className="truncate">
+                                {displayVal}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
-                
-                {expandedItem === `contradiction-${index}` && contradiction.details && (
-                  <div className="mt-3 pt-3 border-t border-red-200">
-                    <p className="text-xs font-medium text-red-700 mb-2">{t('correlation.details') || 'Details:'}</p>
-                    <div className="text-sm text-red-800 space-y-1">
-                      {Object.entries(contradiction.details).map(([key, value], dIndex) => (
-                        <div key={dIndex} className="flex">
-                          <span className="font-medium capitalize mr-2">{key.replace(/_/g, ' ')}:</span>
-                          <span className="truncate">
-                            {Array.isArray(value) ? value.join(', ') : String(value)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
             ))}
           </div>
         </div>

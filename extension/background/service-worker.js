@@ -5,7 +5,97 @@
 // Handles communication between content scripts, popup, and backend API.
 // =============================================================================
 
-import { sendToBackend, getApiUrl } from '../lib/api.js';
+// =============================================================================
+// API UTILITIES (inlined to avoid import issues)
+// =============================================================================
+
+/**
+ * Get the API base URL from storage or use default
+ */
+async function getApiUrl() {
+  try {
+    // Try to get from Chrome storage first
+    const result = await chrome.storage.sync.get(['apiUrl']);
+    if (result.apiUrl) {
+      return result.apiUrl;
+    }
+  } catch (error) {
+    console.warn('[API] Failed to get API URL from storage:', error);
+  }
+
+  // Default to localhost
+  return 'http://localhost:8000';
+}
+
+/**
+ * Send data to backend API
+ */
+async function sendToBackend(endpoint, data) {
+  const baseUrl = await getApiUrl();
+  const url = `${baseUrl}${endpoint}`;
+
+  console.log(`[API] Sending request to: ${url}`, data);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(data)
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    console.log('[API] Response received:', result);
+    return result;
+
+  } catch (error) {
+    console.error('[API] Request failed:', error);
+    throw error;
+  }
+}
+
+// =============================================================================
+// INITIALIZATION
+// =============================================================================
+
+console.log('[Service Worker] Initializing...');
+
+// Wait for chrome APIs to be available
+function initializeServiceWorker() {
+  if (typeof chrome === 'undefined') {
+    console.error('[Service Worker] Chrome APIs not available!');
+    return;
+  }
+
+  console.log('[Service Worker] Chrome APIs available');
+
+  if (chrome.tabs) {
+    console.log('[Service Worker] chrome.tabs API available');
+  } else {
+    console.error('[Service Worker] chrome.tabs API not available!');
+  }
+
+  if (chrome.runtime) {
+    console.log('[Service Worker] chrome.runtime API available');
+  } else {
+    console.error('[Service Worker] chrome.runtime API not available!');
+  }
+
+  if (chrome.storage) {
+    console.log('[Service Worker] chrome.storage API available');
+  } else {
+    console.error('[Service Worker] chrome.storage API not available!');
+  }
+}
+
+// Initialize immediately or wait for chrome to be ready
+console.log('[Service Worker] Starting...');
 
 // =============================================================================
 // CONSTANTS
@@ -21,7 +111,8 @@ const SUPPORTED_PLATFORMS = {
   instagram: {
     name: 'Instagram',
     emoji: '📷',
-    searchUrlPattern: 'https://www.instagram.com/',
+    // Instagram search requires login - use web search interface
+    searchUrlPattern: 'https://www.instagram.com/web/search/topsearch/?query=',
     profileUrlPattern: /instagram\.com\/([a-zA-Z0-9._]+)/
   },
   linkedin: {
@@ -33,27 +124,16 @@ const SUPPORTED_PLATFORMS = {
   x: {
     name: 'X (Twitter)',
     emoji: '𝕏',
+    // Use x.com without www
     searchUrlPattern: 'https://x.com/search?q=',
+    searchSuffix: '&f=user',  // Filter to show users only
     profileUrlPattern: /(?:x\.com|twitter\.com)\/([a-zA-Z0-9_]+)/
   }
 };
 
-// Configuration constants
-const SCAN_CONFIG = {
-  MAX_RETRIES: 2,
-  RETRY_DELAYS: [3000, 6000], // Exponential backoff: 3s, 6s
-  PAGE_LOAD_TIMEOUT: 20000,
-  PLATFORM_EXTRACTION_TIMEOUT: 20000,
-  CONTENT_SCRIPT_WAIT: 2000
-};
-
-// Error type constants
-const ERROR_TYPES = {
-  AUTH_REQUIRED: 'auth_required',
-  TIMEOUT: 'timeout',
-  BLOCKED: 'blocked',
-  EXTRACTION_FAILED: 'extraction_failed'
-};
+// Timeout constants - increased for SPA page loads
+const PAGE_LOAD_TIMEOUT = 5000;   // 5 seconds for page to load
+const EXTRACTION_TIMEOUT = 15000; // 15 seconds for content extraction
 
 // Scan state management
 let currentScan = null;
@@ -64,7 +144,7 @@ let keepAliveInterval = null;
 
 function startKeepAlive() {
   if (keepAliveInterval) return; // Already running
-  
+
   console.log('[Service Worker] Starting keep-alive');
   keepAliveInterval = setInterval(() => {
     // Ping runtime to keep worker alive
@@ -93,45 +173,64 @@ function stopKeepAlive() {
  * Handle messages from content scripts and popup
  */
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Use async wrapper for proper response handling
-  handleMessage(message, sender).then(sendResponse).catch(error => {
-    console.error('Error handling message:', error);
-    sendResponse({ success: false, error: error.message });
-  });
-  
-  // Return true to indicate async response
-  return true;
+  try {
+    // Check if chrome APIs are available
+    if (!chrome || !chrome.runtime) {
+      console.error('[Service Worker] Chrome runtime not available');
+      sendResponse({ success: false, error: 'Extension context not available' });
+      return true;
+    }
+
+    // Use async wrapper for proper response handling
+    handleMessage(message, sender).then(sendResponse).catch(error => {
+      console.error('Error handling message:', error);
+      sendResponse({ success: false, error: error.message });
+    });
+
+    // Return true to indicate async response
+    return true;
+  } catch (error) {
+    console.error('[Service Worker] Error in message listener:', error);
+    sendResponse({ success: false, error: 'Internal extension error' });
+    return true;
+  }
 });
 
 /**
  * Handle messages from web app (external)
  */
 chrome.runtime.onMessageExternal.addListener((message, sender, sendResponse) => {
-  console.log('[Extension] Received message from web app:', message);
-  
-  if (message.action === 'checkExtension') {
-    // Web app checking if extension is installed
-    sendResponse({ 
-      installed: true, 
-      version: chrome.runtime.getManifest().version,
-      ready: true
-    });
+  try {
+    console.log('[Extension] Received message from web app:', message);
+
+    if (message.action === 'checkExtension') {
+      // Web app checking if extension is installed
+      sendResponse({
+        installed: true,
+        version: chrome.runtime.getManifest().version,
+        ready: true
+      });
+      return true;
+    }
+
+    if (message.action === 'startDeepScan') {
+      // Web app requesting a deep scan
+      handleMessage(message, sender)
+        .then(result => {
+          sendResponse({ success: true, data: result });
+        })
+        .catch(error => {
+          sendResponse({ success: false, error: error.message });
+        });
+      return true; // Will respond asynchronously
+    }
+
+    return false;
+  } catch (error) {
+    console.error('[Service Worker] Error in external message listener:', error);
+    sendResponse({ success: false, error: 'Internal extension error' });
     return true;
   }
-  
-  if (message.action === 'startDeepScan') {
-    // Web app requesting a deep scan
-    handleMessage(message, sender)
-      .then(result => {
-        sendResponse({ success: true, data: result });
-      })
-      .catch(error => {
-        sendResponse({ success: false, error: error.message });
-      });
-    return true; // Will respond asynchronously
-  }
-  
-  return false;
 });
 
 /**
@@ -141,31 +240,43 @@ async function handleMessage(message, sender) {
   switch (message.action) {
     case 'startDeepScan':
       return await startDeepScan(message.data);
-    
+
     case 'getScanStatus':
       return getScanStatus();
-    
+
     case 'cancelScan':
       return cancelScan();
-    
+
     case 'profileDataExtracted':
+      console.log('[Background] Received profile data:', message.data);
       return handleProfileData(message.data, sender);
-    
+
     case 'searchResultsExtracted':
+      console.log('[Background] Received search results:', message.data);
       return handleSearchResults(message.data, sender);
-    
-    case 'authenticationRequired':
-      return handleAuthenticationRequired(message.data, sender);
-    
-    case 'contentScriptReady':
-      return handleContentScriptReady(message.data, sender);
-    
+
     case 'getApiUrl':
       return { success: true, url: await getApiUrl() };
-    
+
     case 'sendToBackend':
       return await sendToBackend(message.endpoint, message.data);
-    
+
+    // Guided Login Flow Actions
+    case 'checkAuthStatus':
+      return { success: true, authStatus: await checkAuthStatus(message.data?.platforms) };
+
+    case 'openLoginTab':
+      return await openLoginTab(message.data?.platform);
+
+    case 'startGuidedLogin':
+      return await startGuidedLogin(message.data?.platforms);
+
+    case 'waitForLogin':
+      return await waitForLogin(message.data?.platform, message.data?.timeout);
+
+    case 'authStatusUpdate':
+      return handleAuthStatusUpdate(message.data);
+
     default:
       return { success: false, error: 'Unknown action' };
   }
@@ -185,15 +296,15 @@ async function handleMessage(message, sender) {
  */
 async function startDeepScan(data) {
   const { identifierType, identifierValue, platforms } = data;
-  
+
   if (!identifierValue) {
     return { success: false, error: 'Identifier value is required' };
   }
-  
+
   if (currentScan && currentScan.status === 'in_progress') {
     return { success: false, error: 'A scan is already in progress' };
   }
-  
+
   // Initialize scan state
   currentScan = {
     id: generateScanId(),
@@ -207,41 +318,47 @@ async function startDeepScan(data) {
     completedPlatforms: [],
     results: {}
   };
-  
+
   scanResults = {};
-  
+
   // Start keep-alive mechanism
   startKeepAlive();
-  
+
   try {
     // Notify popup of scan start
     notifyPopup('scanStarted', { scanId: currentScan.id });
-    
-    // Start scanning each platform
-    for (const platform of currentScan.platforms) {
-      if (currentScan.status !== 'in_progress') {
-        break; // Scan was cancelled
+
+    // Start scanning platforms in parallel for faster results
+    const scanPromises = currentScan.platforms.map(async (platform) => {
+      try {
+        await scanPlatform(platform, identifierValue, identifierType);
+        return { platform, success: true };
+      } catch (error) {
+        console.error(`[Scan] Platform ${platform} failed:`, error);
+        return { platform, success: false, error: error.message };
       }
-      
-      currentScan.currentPlatform = platform;
-      await scanPlatform(platform, identifierValue, identifierType);
-      currentScan.completedPlatforms.push(platform);
-      currentScan.progress = (currentScan.completedPlatforms.length / currentScan.platforms.length) * 100;
-      
-      // Notify popup of progress
-      notifyPopup('scanProgress', {
-        platform,
-        progress: currentScan.progress,
-        completedPlatforms: currentScan.completedPlatforms
-      });
-    }
-    
+    });
+
+    // Wait for all platforms to complete (with individual timeouts)
+    const results = await Promise.allSettled(scanPromises);
+
+    // Log any failures
+    results.forEach((result, index) => {
+      if (result.status === 'rejected' || (result.value && !result.value.success)) {
+        console.warn(`[Scan] Platform ${currentScan.platforms[index]} encountered issues`);
+      }
+    });
+
+    // Mark all platforms as completed
+    currentScan.completedPlatforms = [...currentScan.platforms];
+    currentScan.progress = 100;
+
     // Finalize scan
     if (currentScan.status === 'in_progress') {
       currentScan.status = 'completed';
       currentScan.endTime = Date.now();
       currentScan.results = scanResults;
-      
+
       // Send results to backend
       try {
         const backendResponse = await sendToBackend('/api/deep-scan/analyze', {
@@ -252,26 +369,31 @@ async function startDeepScan(data) {
           results: scanResults,
           scan_duration_ms: currentScan.endTime - currentScan.startTime
         });
-        
+
         currentScan.backendAnalysis = backendResponse;
       } catch (error) {
         console.error('Failed to send results to backend:', error);
         currentScan.backendError = error.message;
       }
-      
+
       // Notify popup of completion
       notifyPopup('scanCompleted', {
         scanId: currentScan.id,
         results: currentScan.results,
         analysis: currentScan.backendAnalysis
       });
+
+      // Notify web app of completion
+      notifyWebApp('scanCompleted', {
+        results: currentScan.backendAnalysis || currentScan.results
+      });
     }
-    
+
   } finally {
     // Always stop keep-alive when scan ends
     stopKeepAlive();
   }
-  
+
   return { success: true, scanId: currentScan.id };
 }
 
@@ -280,14 +402,13 @@ async function startDeepScan(data) {
  * @param {string} platform - Platform key
  * @param {string} identifier - Value to search
  * @param {string} identifierType - Type of identifier
- * @param {number} retryCount - Current retry attempt (default 0)
  */
-async function scanPlatform(platform, identifier, identifierType, retryCount = 0) {
+async function scanPlatform(platform, identifier, identifierType) {
   const platformConfig = SUPPORTED_PLATFORMS[platform];
   if (!platformConfig) return;
-  
-  console.log(`[Scan] Starting scan for ${platform} with identifier: ${identifier} (attempt ${retryCount + 1})`);
-  
+
+  console.log(`[Scan] Starting scan for ${platform} with identifier: ${identifier}`);
+
   // Build search query based on identifier type
   let searchQuery = identifier;
   if (identifierType === 'email') {
@@ -295,182 +416,123 @@ async function scanPlatform(platform, identifier, identifierType, retryCount = 0
     searchQuery = identifier.split('@')[0];
   }
   // Note: Names will be URL-encoded when building the search URL
-  
-  // Initialize platform results (if first attempt)
-  if (retryCount === 0) {
-    scanResults[platform] = {
-      platform: platformConfig.name,
-      emoji: platformConfig.emoji,
-      status: 'scanning',
-      profiles: [],
-      searchResults: [],
-      errors: [],
-      startTime: Date.now()
-    };
-    
-    // Notify web app that platform scan started
-    notifyWebApp('platformStarted', {
+
+  // Initialize platform results
+  scanResults[platform] = {
+    platform: platformConfig.name,
+    emoji: platformConfig.emoji,
+    status: 'scanning',
+    profiles: [],
+    searchResults: [],
+    errors: [],
+    startTime: Date.now()
+  };
+
+  // Notify web app that platform scan started
+  notifyWebApp('platformStarted', {
+    platform: platformConfig.name,
+    platformKey: platform,
+    emoji: platformConfig.emoji
+  });
+
+  // Notify popup about platform scan start
+  notifyPopup('platformScanStarted', {
+    platform,
+    platformName: platformConfig.name,
+    emoji: platformConfig.emoji
+  });
+
+  let tab = null;
+
+  try {
+    // Always use search URLs for reliable results
+    // Direct profile URLs often fail due to authentication or redirects
+    let searchUrl = platformConfig.searchUrlPattern + encodeURIComponent(searchQuery);
+
+    // Add platform-specific search suffixes (e.g., X user filter)
+    if (platformConfig.searchSuffix) {
+      searchUrl += platformConfig.searchSuffix;
+    }
+
+    console.log(`[Scan] Using search URL for ${platform}: ${searchUrl}`);
+
+    // Create new tab in background (not active)
+    if (!chrome.tabs || !chrome.tabs.create) {
+      throw new Error('chrome.tabs.create API not available');
+    }
+
+    tab = await chrome.tabs.create({
+      url: searchUrl,
+      active: false
+    });
+
+    console.log(`[Scan] Tab created for ${platform}, ID: ${tab.id}`);
+
+    // Wait for page to fully load (SPAs need more time)
+    await new Promise(resolve => setTimeout(resolve, PAGE_LOAD_TIMEOUT));
+
+    // Inject content scripts dynamically for reliable execution
+    // This ensures scripts run even when tabs are created programmatically
+    try {
+      if (chrome.scripting && chrome.scripting.executeScript) {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content/shared.js']
+        });
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: [`content/${platform}.js`]
+        });
+        console.log(`[Scan] Injected content scripts for ${platform}`);
+
+        // Give scripts time to initialize
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    } catch (injectError) {
+      console.warn(`[Scan] Could not inject scripts for ${platform}:`, injectError.message);
+      // Continue anyway - manifest content scripts may have loaded
+    }
+
+    // Send extraction message to content script
+    const messageAction = 'extractSearchResults';
+    console.log(`[Scan] Sending ${messageAction} message to tab ${tab.id}`);
+
+    if (!chrome.tabs || !chrome.tabs.sendMessage) {
+      throw new Error('chrome.tabs.sendMessage API not available');
+    }
+
+    try {
+      await chrome.tabs.sendMessage(tab.id, {
+        action: messageAction,
+        query: identifier,
+        identifierType
+      });
+    } catch (msgError) {
+      console.warn(`[Scan] Message failed for ${platform}:`, msgError.message);
+
+      // Notify web app about the issue
+      notifyWebApp('platformError', {
+        platform: platformConfig.name,
+        platformKey: platform,
+        error: `Content script not responding. Please ensure you are logged into ${platformConfig.name}.`,
+        requiresAuth: true
+      });
+    }
+
+    // Wait for content script to extract and send results
+    await waitForPlatformResults(platform, EXTRACTION_TIMEOUT);
+
+  } catch (error) {
+    console.error(`[Scan] Error scanning ${platform}:`, error);
+    scanResults[platform].status = 'error';
+    scanResults[platform].errors.push(error.message);
+
+    // Notify web app of the error
+    notifyWebApp('platformError', {
       platform: platformConfig.name,
       platformKey: platform,
-      emoji: platformConfig.emoji
+      error: error.message
     });
-    
-    // Notify popup about platform scan start
-    notifyPopup('platformScanStarted', {
-      platform,
-      platformName: platformConfig.name,
-      emoji: platformConfig.emoji
-    });
-  }
-  
-  let tab = null;
-  
-  try {
-    // Determine URL and navigation strategy based on platform
-    let targetUrl;
-    let needsInteractiveSearch = false;
-    
-    if (platform === 'instagram') {
-      // Instagram requires interactive search
-      targetUrl = 'https://www.instagram.com/';
-      needsInteractiveSearch = true;
-    } else {
-      // Other platforms support direct search URLs
-      targetUrl = platformConfig.searchUrlPattern + encodeURIComponent(searchQuery);
-    }
-    
-    console.log(`[Scan] Opening tab for ${platform}: ${targetUrl}`);
-    
-    // Create new tab in background (not active)
-    tab = await chrome.tabs.create({ 
-      url: targetUrl, 
-      active: false 
-    });
-    
-    console.log(`[Scan] Tab created for ${platform}, ID: ${tab.id}`);
-    
-    // Wait for page to load using tab listener
-    const pageLoaded = await waitForTabLoad(tab.id, SCAN_CONFIG.PAGE_LOAD_TIMEOUT);
-    
-    if (!pageLoaded) {
-      throw new Error('Page load timeout');
-    }
-    
-    // Additional wait for content script injection
-    await new Promise(resolve => setTimeout(resolve, SCAN_CONFIG.CONTENT_SCRIPT_WAIT));
-    
-    // Check authentication status
-    try {
-      const authCheck = await chrome.tabs.sendMessage(tab.id, {
-        action: 'checkAuthentication'
-      });
-      
-      if (!authCheck.authenticated) {
-        const errorData = {
-          error_type: ERROR_TYPES.AUTH_REQUIRED,
-          message: `You are not logged into ${platformConfig.name}`,
-          suggestion: `Please log into ${platformConfig.name} and try again`,
-          loginUrl: authCheck.loginUrl || platformConfig.searchUrlPattern.split('/search')[0]
-        };
-        
-        scanResults[platform].status = ERROR_TYPES.AUTH_REQUIRED;
-        scanResults[platform].errors.push(errorData);
-        
-        console.log(`[Scan] Authentication required for ${platform}`);
-        return; // Don't retry auth errors
-      }
-    } catch (authError) {
-      console.warn(`[Scan] Could not check authentication for ${platform}:`, authError);
-      // Continue anyway - might still work
-    }
-    
-    // Handle Instagram's interactive search
-    if (needsInteractiveSearch) {
-      try {
-        console.log(`[Scan] Performing interactive search on ${platform}`);
-        await chrome.tabs.sendMessage(tab.id, {
-          action: 'performSearch',
-          query: searchQuery
-        });
-        
-        // Wait for search to complete
-        await new Promise(resolve => setTimeout(resolve, 3000));
-      } catch (searchError) {
-        console.error(`[Scan] Interactive search failed for ${platform}:`, searchError);
-        throw new Error(`Interactive search failed: ${searchError.message}`);
-      }
-    } else {
-      // Send message to content script to extract results
-      try {
-        console.log(`[Scan] Sending extraction message to tab ${tab.id}`);
-        await chrome.tabs.sendMessage(tab.id, {
-          action: 'extractSearchResults',
-          query: identifier,
-          identifierType
-        });
-      } catch (msgError) {
-        console.error(`[Scan] Failed to send message to ${platform} tab:`, msgError);
-        throw new Error(`Failed to communicate with content script: ${msgError.message}`);
-      }
-    }
-    
-    // Wait for content script to extract and send results
-    await waitForPlatformResults(platform, SCAN_CONFIG.PLATFORM_EXTRACTION_TIMEOUT);
-    
-    // Check if extraction was successful
-    const hasAuthError = scanResults[platform].errors.some(e => 
-      typeof e === 'object' && e.error_type === ERROR_TYPES.AUTH_REQUIRED
-    );
-    
-    if (hasAuthError) {
-      // Don't retry auth errors - user needs to log in
-      return;
-    }
-    
-    // Check if we have retryable errors
-    const hasRetryableError = scanResults[platform].errors.some(e => 
-      typeof e === 'object' && 
-      (e.error_type === ERROR_TYPES.EXTRACTION_FAILED || e.error_type === ERROR_TYPES.TIMEOUT)
-    );
-    
-    if (scanResults[platform].status === 'timeout' || 
-        (hasRetryableError && retryCount < SCAN_CONFIG.MAX_RETRIES)) {
-      throw new Error('Extraction failed or timed out');
-    }
-    
-  } catch (error) {
-    console.error(`[Scan] Error scanning ${platform} (attempt ${retryCount + 1}):`, error);
-    
-    const errorData = {
-      error_type: ERROR_TYPES.EXTRACTION_FAILED,
-      message: `Failed to scan ${platformConfig.name}: ${error.message}`,
-      suggestion: 'Please check your internet connection and try again'
-    };
-    
-    // Retry logic
-    if (retryCount < SCAN_CONFIG.MAX_RETRIES && error.message !== 'Page load timeout') {
-      const delay = SCAN_CONFIG.RETRY_DELAYS[retryCount];
-      console.log(`[Scan] Retrying ${platform} in ${delay}ms...`);
-      
-      // Close the current tab
-      if (tab && tab.id) {
-        try {
-          await chrome.tabs.remove(tab.id);
-        } catch (closeError) {
-          console.warn(`[Scan] Could not close tab for retry:`, closeError);
-        }
-      }
-      
-      // Wait before retry
-      await new Promise(resolve => setTimeout(resolve, delay));
-      
-      // Retry the scan
-      return await scanPlatform(platform, identifier, identifierType, retryCount + 1);
-    } else {
-      // Max retries reached or non-retryable error
-      scanResults[platform].status = 'error';
-      scanResults[platform].errors.push(errorData);
-    }
   } finally {
     // Always close the tab after extraction, even if there was an error
     if (tab && tab.id) {
@@ -482,16 +544,16 @@ async function scanPlatform(platform, identifier, identifierType, retryCount = 0
       }
     }
   }
-  
+
   // Mark as completed if still scanning
   if (scanResults[platform].status === 'scanning') {
     scanResults[platform].status = 'completed';
   }
-  
+
   // Calculate duration
   scanResults[platform].endTime = Date.now();
   scanResults[platform].duration = scanResults[platform].endTime - scanResults[platform].startTime;
-  
+
   // Notify web app that platform scan completed
   notifyWebApp('platformCompleted', {
     platform: platformConfig.name,
@@ -499,10 +561,9 @@ async function scanPlatform(platform, identifier, identifierType, retryCount = 0
     emoji: platformConfig.emoji,
     count: scanResults[platform].profiles.length + scanResults[platform].searchResults.length,
     duration: scanResults[platform].duration,
-    status: scanResults[platform].status,
-    errors: scanResults[platform].errors
+    status: scanResults[platform].status
   });
-  
+
   // Notify popup about platform scan completion
   notifyPopup('platformScanCompleted', {
     platform,
@@ -510,66 +571,25 @@ async function scanPlatform(platform, identifier, identifierType, retryCount = 0
     emoji: platformConfig.emoji,
     status: scanResults[platform].status,
     profilesFound: scanResults[platform].profiles.length,
-    searchResultsFound: scanResults[platform].searchResults.length,
-    errors: scanResults[platform].errors
+    searchResultsFound: scanResults[platform].searchResults.length
   });
-  
-  console.log(`[Scan] Completed ${platform} scan in ${scanResults[platform].duration}ms`);
-}
 
-/**
- * Wait for tab to complete loading
- * @param {number} tabId - Tab ID
- * @param {number} timeout - Maximum wait time in ms
- * @returns {Promise<boolean>} True if loaded, false if timeout
- */
-function waitForTabLoad(tabId, timeout = 20000) {
-  return new Promise((resolve) => {
-    const startTime = Date.now();
-    let isResolved = false;
-    
-    const listener = (updatedTabId, changeInfo, tab) => {
-      if (updatedTabId === tabId && changeInfo.status === 'complete') {
-        if (!isResolved) {
-          isResolved = true;
-          chrome.tabs.onUpdated.removeListener(listener);
-          console.log(`[Scan] Tab ${tabId} loaded successfully`);
-          resolve(true);
-        }
-      }
-    };
-    
-    chrome.tabs.onUpdated.addListener(listener);
-    
-    // Timeout fallback
-    setTimeout(() => {
-      if (!isResolved) {
-        isResolved = true;
-        chrome.tabs.onUpdated.removeListener(listener);
-        console.warn(`[Scan] Tab ${tabId} load timeout after ${timeout}ms`);
-        resolve(false);
-      }
-    }, timeout);
-    
-    // Also check if tab is already complete
-    chrome.tabs.get(tabId, (tab) => {
-      if (chrome.runtime.lastError) {
-        if (!isResolved) {
-          isResolved = true;
-          chrome.tabs.onUpdated.removeListener(listener);
-          resolve(false);
-        }
-        return;
-      }
-      
-      if (tab.status === 'complete' && !isResolved) {
-        isResolved = true;
-        chrome.tabs.onUpdated.removeListener(listener);
-        console.log(`[Scan] Tab ${tabId} was already loaded`);
-        resolve(true);
-      }
+  // Update global scan progress for parallel execution
+  if (currentScan) {
+    currentScan.completedPlatforms = Object.keys(scanResults).filter(p =>
+      scanResults[p].status === 'completed' || scanResults[p].status === 'timeout'
+    );
+    currentScan.progress = (currentScan.completedPlatforms.length / currentScan.platforms.length) * 100;
+
+    // Notify popup of overall progress
+    notifyPopup('scanProgress', {
+      platform,
+      progress: currentScan.progress,
+      completedPlatforms: currentScan.completedPlatforms
     });
-  });
+  }
+
+  console.log(`[Scan] Completed ${platform} scan in ${scanResults[platform].duration}ms`);
 }
 
 /**
@@ -578,27 +598,27 @@ function waitForTabLoad(tabId, timeout = 20000) {
 function waitForPlatformResults(platform, timeout) {
   return new Promise((resolve) => {
     const startTime = Date.now();
-    
+
     const checkResults = () => {
       const elapsed = Date.now() - startTime;
-      
+
       if (scanResults[platform]?.status !== 'scanning') {
         console.log(`[Scan] ${platform} results received after ${elapsed}ms`);
         resolve();
         return;
       }
-      
+
       if (elapsed > timeout) {
         console.warn(`[Scan] ${platform} timed out after ${elapsed}ms`);
         scanResults[platform].status = 'timeout';
-        scanResults[platform].errors.push(`Extraction timed out after ${timeout}ms`);
+        scanResults[platform].errors.push(`Extraction timed out after ${Math.round(timeout / 1000)}s`);
         resolve();
         return;
       }
-      
-      setTimeout(checkResults, 500);
+
+      setTimeout(checkResults, 200);
     };
-    
+
     checkResults();
   });
 }
@@ -608,7 +628,7 @@ function waitForPlatformResults(platform, timeout) {
  */
 function handleProfileData(data, sender) {
   const { platform, profile } = data;
-  
+
   if (!scanResults[platform]) {
     scanResults[platform] = {
       platform: SUPPORTED_PLATFORMS[platform]?.name || platform,
@@ -619,10 +639,10 @@ function handleProfileData(data, sender) {
       errors: []
     };
   }
-  
+
   scanResults[platform].profiles.push(profile);
   scanResults[platform].status = 'completed';
-  
+
   return { success: true };
 }
 
@@ -631,7 +651,7 @@ function handleProfileData(data, sender) {
  */
 function handleSearchResults(data, sender) {
   const { platform, results } = data;
-  
+
   if (!scanResults[platform]) {
     scanResults[platform] = {
       platform: SUPPORTED_PLATFORMS[platform]?.name || platform,
@@ -642,61 +662,10 @@ function handleSearchResults(data, sender) {
       errors: []
     };
   }
-  
+
   scanResults[platform].searchResults = results;
   scanResults[platform].status = 'completed';
-  
-  return { success: true };
-}
 
-/**
- * Handle authentication required notification from content scripts
- */
-function handleAuthenticationRequired(data, sender) {
-  const { platform, platformName, loginUrl, message } = data;
-  
-  console.log(`[Auth] Authentication required for ${platformName}`);
-  
-  if (scanResults[platform]) {
-    scanResults[platform].status = 'auth_required';
-    scanResults[platform].errors.push({
-      error_type: 'auth_required',
-      message: message || `Please log into ${platformName}`,
-      suggestion: `Click here to log in to ${platformName}`,
-      loginUrl: loginUrl
-    });
-  }
-  
-  // Notify popup and web app
-  notifyPopup('authenticationRequired', {
-    platform,
-    platformName,
-    loginUrl,
-    message
-  });
-  
-  notifyWebApp('authenticationRequired', {
-    platform,
-    platformName,
-    loginUrl,
-    message
-  });
-  
-  return { success: true };
-}
-
-/**
- * Handle content script readiness signal
- */
-function handleContentScriptReady(data, sender) {
-  const { platform, platformName, authenticated, url, loginUrl } = data;
-  
-  console.log(`[ContentScript] ${platformName} content script ready. Authenticated: ${authenticated}`);
-  
-  if (!authenticated && loginUrl) {
-    console.log(`[ContentScript] ${platformName} requires authentication: ${loginUrl}`);
-  }
-  
   return { success: true };
 }
 
@@ -711,7 +680,7 @@ function getScanStatus() {
   if (!currentScan) {
     return { success: true, status: 'idle', scan: null };
   }
-  
+
   return {
     success: true,
     status: currentScan.status,
@@ -736,15 +705,15 @@ function cancelScan() {
   if (!currentScan || currentScan.status !== 'in_progress') {
     return { success: false, error: 'No scan in progress' };
   }
-  
+
   currentScan.status = 'cancelled';
   currentScan.endTime = Date.now();
-  
+
   // Stop keep-alive when scan is cancelled
   stopKeepAlive();
-  
+
   notifyPopup('scanCancelled', { scanId: currentScan.id });
-  
+
   return { success: true };
 }
 
@@ -764,18 +733,24 @@ function generateScanId() {
  */
 function notifyPopup(event, data) {
   // Send to extension popup
-  chrome.runtime.sendMessage({ event, data }).catch(() => {
-    // Popup might be closed, ignore error
-  });
-  
-  // Send to web app content script
-  chrome.tabs.query({ url: ['http://localhost:3000/*', 'http://localhost:*/*'] }).then(tabs => {
-    tabs.forEach(tab => {
-      chrome.tabs.sendMessage(tab.id, { event, data }).catch(() => {
-        // Content script might not be loaded, ignore error
-      });
+  if (chrome.runtime && chrome.runtime.sendMessage) {
+    chrome.runtime.sendMessage({ event, data }).catch(() => {
+      // Popup might be closed, ignore error
     });
-  });
+  }
+
+  // Send to web app content script
+  if (chrome.tabs && chrome.tabs.query && chrome.tabs.sendMessage) {
+    chrome.tabs.query({ url: ['http://localhost:3000/*', 'http://localhost:*/*'] }).then(tabs => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, { event, data }).catch(() => {
+          // Content script might not be loaded, ignore error
+        });
+      });
+    }).catch(err => {
+      console.warn('Could not query web app tabs:', err);
+    });
+  }
 }
 
 /**
@@ -783,19 +758,288 @@ function notifyPopup(event, data) {
  */
 function notifyWebApp(event, data) {
   // Send to web app content script
-  chrome.tabs.query({ url: ['http://localhost:3000/*', 'http://localhost:*/*'] }).then(tabs => {
-    tabs.forEach(tab => {
-      chrome.tabs.sendMessage(tab.id, {
-        action: 'webappEvent',
-        event,
-        data
-      }).catch((error) => {
-        console.warn(`Could not send event to web app tab ${tab.id}:`, error.message);
+  if (chrome.tabs && chrome.tabs.query && chrome.tabs.sendMessage) {
+    chrome.tabs.query({ url: ['http://localhost:3000/*', 'http://localhost:*/*'] }).then(tabs => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'webappEvent',
+          event,
+          data
+        }).catch((error) => {
+          console.warn(`Could not send event to web app tab ${tab.id}:`, error.message);
+        });
       });
+    }).catch(err => {
+      console.warn('Could not query web app tabs:', err);
     });
-  }).catch(err => {
-    console.warn('Could not query web app tabs:', err);
+  }
+}
+
+// =============================================================================
+// GUIDED LOGIN FLOW
+// =============================================================================
+
+// Platform login URLs
+const PLATFORM_LOGIN_URLS = {
+  facebook: 'https://www.facebook.com/',
+  instagram: 'https://www.instagram.com/',
+  linkedin: 'https://www.linkedin.com/login',
+  x: 'https://x.com/'
+};
+
+// Track login tabs for guided flow
+let loginTabs = {};
+let authStatusCache = {};
+
+/**
+ * Check auth status for multiple platforms
+ * @param {string[]} platforms - List of platforms to check
+ * @returns {Object} Auth status for each platform
+ */
+async function checkAuthStatus(platforms) {
+  const platformList = platforms || Object.keys(SUPPORTED_PLATFORMS);
+  const results = {};
+
+  console.log('[Auth] Checking auth status for:', platformList);
+
+  for (const platform of platformList) {
+    try {
+      results[platform] = await checkPlatformAuth(platform);
+    } catch (error) {
+      console.error(`[Auth] Error checking ${platform}:`, error);
+      results[platform] = { isLoggedIn: false, error: error.message };
+    }
+  }
+
+  console.log('[Auth] Auth status results:', results);
+  return results;
+}
+
+/**
+ * Check if user is logged into a specific platform
+ * @param {string} platform - Platform key
+ * @returns {Object} Auth status
+ */
+async function checkPlatformAuth(platform) {
+  const loginUrl = PLATFORM_LOGIN_URLS[platform];
+  if (!loginUrl) {
+    return { isLoggedIn: false, error: 'Unknown platform' };
+  }
+
+  // Check cache first (valid for 30 seconds)
+  const cached = authStatusCache[platform];
+  if (cached && Date.now() - cached.timestamp < 30000) {
+    console.log(`[Auth] Using cached status for ${platform}:`, cached.isLoggedIn);
+    return cached;
+  }
+
+  let tab = null;
+  try {
+    // Create tab in background to check auth
+    tab = await chrome.tabs.create({
+      url: loginUrl,
+      active: false
+    });
+
+    console.log(`[Auth] Created tab ${tab.id} to check ${platform}`);
+
+    // Wait for page to load
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    // Inject auth detector and check status
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content/auth-detector.js']
+      });
+    } catch (injectError) {
+      console.warn(`[Auth] Could not inject script for ${platform}:`, injectError.message);
+    }
+
+    // Give script time to initialize
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Request auth status from content script
+    const response = await chrome.tabs.sendMessage(tab.id, { action: 'getAuthStatus' });
+
+    const result = {
+      platform,
+      isLoggedIn: response?.isLoggedIn || false,
+      timestamp: Date.now()
+    };
+
+    // Cache result
+    authStatusCache[platform] = result;
+
+    console.log(`[Auth] ${platform} auth status:`, result.isLoggedIn);
+    return result;
+
+  } catch (error) {
+    console.error(`[Auth] Error checking ${platform}:`, error);
+    return { platform, isLoggedIn: false, error: error.message };
+  } finally {
+    // Close the check tab
+    if (tab?.id) {
+      try {
+        await chrome.tabs.remove(tab.id);
+      } catch (e) {
+        // Tab may already be closed
+      }
+    }
+  }
+}
+
+/**
+ * Open login tab for a specific platform
+ * @param {string} platform - Platform key
+ * @returns {Object} Tab info
+ */
+async function openLoginTab(platform) {
+  const loginUrl = PLATFORM_LOGIN_URLS[platform];
+  if (!loginUrl) {
+    return { success: false, error: 'Unknown platform' };
+  }
+
+  console.log(`[Auth] Opening login tab for ${platform}`);
+
+  // Close existing login tab for this platform if any
+  if (loginTabs[platform]) {
+    try {
+      await chrome.tabs.remove(loginTabs[platform]);
+    } catch (e) {
+      // Tab may not exist
+    }
+  }
+
+  // Open login page in foreground
+  const tab = await chrome.tabs.create({
+    url: loginUrl,
+    active: true  // Make it active so user can log in
   });
+
+  loginTabs[platform] = tab.id;
+
+  // Clear cached auth status for this platform
+  delete authStatusCache[platform];
+
+  return {
+    success: true,
+    tabId: tab.id,
+    platform,
+    loginUrl
+  };
+}
+
+/**
+ * Wait for login to complete on a platform
+ * @param {string} platform - Platform key
+ * @param {number} timeout - Timeout in ms
+ * @returns {Promise<boolean>} Whether login completed
+ */
+function waitForLogin(platform, timeout = 120000) {
+  return new Promise((resolve) => {
+    const startTime = Date.now();
+    const checkInterval = 3000; // Check every 3 seconds
+
+    const checkAuth = async () => {
+      const elapsed = Date.now() - startTime;
+
+      if (elapsed > timeout) {
+        console.log(`[Auth] Login timeout for ${platform}`);
+        resolve({ success: false, reason: 'timeout' });
+        return;
+      }
+
+      // Check if tab still exists
+      const tabId = loginTabs[platform];
+      if (tabId) {
+        try {
+          const tab = await chrome.tabs.get(tabId);
+
+          // Try to check auth status
+          try {
+            const response = await chrome.tabs.sendMessage(tabId, { action: 'getAuthStatus' });
+            if (response?.isLoggedIn) {
+              console.log(`[Auth] Login completed for ${platform}`);
+
+              // Update cache
+              authStatusCache[platform] = {
+                platform,
+                isLoggedIn: true,
+                timestamp: Date.now()
+              };
+
+              // Notify web app
+              notifyWebApp('authSuccess', { platform, isLoggedIn: true });
+
+              resolve({ success: true, platform });
+              return;
+            }
+          } catch (e) {
+            // Content script not ready, will retry
+          }
+        } catch (e) {
+          // Tab closed, user cancelled
+          console.log(`[Auth] Login tab closed for ${platform}`);
+          delete loginTabs[platform];
+          resolve({ success: false, reason: 'cancelled' });
+          return;
+        }
+      }
+
+      // Schedule next check
+      setTimeout(checkAuth, checkInterval);
+    };
+
+    // Start checking
+    checkAuth();
+  });
+}
+
+/**
+ * Start guided login flow for multiple platforms
+ * @param {string[]} platforms - Platforms that need login
+ * @returns {Object} Result
+ */
+async function startGuidedLogin(platforms) {
+  console.log('[Auth] Starting guided login for:', platforms);
+
+  // Notify web app that guided login is starting
+  notifyWebApp('guidedLoginStarted', { platforms });
+
+  // Open first platform
+  if (platforms.length > 0) {
+    await openLoginTab(platforms[0]);
+  }
+
+  return {
+    success: true,
+    platforms,
+    message: 'Please log into the displayed platform(s)'
+  };
+}
+
+/**
+ * Handle auth status update from content script
+ */
+function handleAuthStatusUpdate(data) {
+  const { platform, isLoggedIn } = data;
+
+  if (platform && isLoggedIn) {
+    // Update cache
+    authStatusCache[platform] = {
+      platform,
+      isLoggedIn,
+      timestamp: Date.now()
+    };
+
+    // Notify web app
+    notifyWebApp('authSuccess', { platform, isLoggedIn: true });
+
+    console.log(`[Auth] ${platform} login detected`);
+  }
+
+  return { success: true };
 }
 
 // =============================================================================
@@ -806,25 +1050,34 @@ function notifyWebApp(event, data) {
  * Handle extension installation/update
  */
 chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === 'install') {
-    console.log('Digital Footprint Analyzer extension installed');
-    // Set default settings
-    chrome.storage.local.set({
-      apiUrl: 'http://localhost:8000',
-      enableNotifications: true
-    });
-  } else if (details.reason === 'update') {
-    console.log('Digital Footprint Analyzer extension updated to version', chrome.runtime.getManifest().version);
+  try {
+    console.log('[Service Worker] Installed, checking APIs...');
+    // Simple API check
+    if (typeof chrome !== 'undefined') {
+      console.log('[Service Worker] Chrome APIs available');
+      if (chrome.tabs) console.log('[Service Worker] tabs API available');
+      if (chrome.runtime) console.log('[Service Worker] runtime API available');
+      if (chrome.storage) console.log('[Service Worker] storage API available');
+    }
+
+    if (details.reason === 'install') {
+      console.log('Digital Footprint Analyzer extension installed');
+      // Set default settings
+      if (chrome.storage && chrome.storage.local) {
+        chrome.storage.local.set({
+          apiUrl: 'http://localhost:8000',
+          enableNotifications: true
+        });
+      }
+    } else if (details.reason === 'update') {
+      console.log('Digital Footprint Analyzer extension updated to version', chrome.runtime.getManifest().version);
+    }
+  } catch (error) {
+    console.error('[Service Worker] Error in onInstalled listener:', error);
   }
 });
 
 /**
- * Keep service worker alive during scans
+ * Keep service worker alive during scans (simplified)
  */
-chrome.alarms.create('keepAlive', { periodInMinutes: 0.5 });
-
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === 'keepAlive' && currentScan?.status === 'in_progress') {
-    console.log('Keeping service worker alive during scan');
-  }
-});
+console.log('[Service Worker] Alarm system disabled for stability');

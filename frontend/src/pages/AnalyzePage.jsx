@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { analyze } from '../services/api';
+import { lightScan } from '../services/api';
 import { detectExtension, startDeepScanViaExtension, onExtensionEvent, cancelScan } from '../utils/extensionBridge';
 import InteractiveLoading from '../components/InteractiveLoading';
 
@@ -16,22 +16,51 @@ function AnalyzePage() {
   const [extensionReady, setExtensionReady] = useState(false);
   const [showExtensionSetup, setShowExtensionSetup] = useState(false);
   const [scanMode, setScanMode] = useState('light'); // 'light' or 'deep'
-  
+
+  // Platform selection for deep scan
+  const [selectedPlatforms, setSelectedPlatforms] = useState({
+    facebook: true,
+    instagram: true,
+    linkedin: true,
+    x: true
+  });
+
+  // Derive scan platforms from selected
+  const scanPlatforms = Object.entries(selectedPlatforms)
+    .filter(([_, selected]) => selected)
+    .map(([platform]) => platform);
+
+  // Platform display info
+  const PLATFORM_INFO = {
+    facebook: { name: 'Facebook', emoji: '📘', color: 'blue' },
+    instagram: { name: 'Instagram', emoji: '📷', color: 'pink' },
+    linkedin: { name: 'LinkedIn', emoji: '💼', color: 'indigo' },
+    x: { name: 'X (Twitter)', emoji: '𝕏', color: 'gray' }
+  };
+
+  const togglePlatform = (platform) => {
+    setSelectedPlatforms(prev => ({
+      ...prev,
+      [platform]: !prev[platform]
+    }));
+  };
+
   // Deep scan progress tracking
   const [isDeepScanning, setIsDeepScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [currentPlatform, setCurrentPlatform] = useState(null);
   const [completedPlatforms, setCompletedPlatforms] = useState([]);
-  const [scanPlatforms] = useState(['facebook', 'instagram', 'linkedin', 'x']);
+
+
 
   useEffect(() => {
     // Check for extension on mount
     checkExtension();
-    
+
     // Listen for extension events
     const cleanup = onExtensionEvent((eventType, eventData) => {
       console.log('Extension event:', eventType, eventData);
-      
+
       if (eventType === 'scanStarted') {
         setIsDeepScanning(true);
         setScanProgress(0);
@@ -69,14 +98,14 @@ function AnalyzePage() {
         setExtensionReady(true);
       }
     });
-    
+
     return cleanup;
   }, [navigate]);
 
   const checkExtension = async () => {
     const isInstalled = await detectExtension();
     setExtensionReady(isInstalled);
-    
+
     if (!isInstalled) {
       console.log('[Web App] Extension not detected');
     }
@@ -93,10 +122,8 @@ function AnalyzePage() {
     setError(null);
 
     try {
-      // Send only the identifier - backend will auto-detect the type
-      const results = await analyze({
-        identifier: identifier.trim()
-      });
+      // Use lightScan for the light scan functionality
+      const results = await lightScan('username', identifier.trim(), 'Sri Lanka');
       navigate('/results', { state: { results } });
     } catch (err) {
       console.error('Analysis error:', err);
@@ -106,6 +133,7 @@ function AnalyzePage() {
     }
   };
 
+  // Start deep scan directly
   const handleDeepScan = async () => {
     if (!identifier.trim()) {
       setError('Please enter an identifier to scan');
@@ -117,6 +145,12 @@ function AnalyzePage() {
       return;
     }
 
+    // Start the deep scan immediately
+    startDeepScanNow();
+  };
+
+  // Start the deep scan
+  const startDeepScanNow = async (platforms = scanPlatforms) => {
     setIsLoading(true);
     setIsDeepScanning(true);
     setError(null);
@@ -129,7 +163,7 @@ function AnalyzePage() {
       await startDeepScanViaExtension({
         identifierType: 'username',
         identifierValue: identifier.trim(),
-        platforms: scanPlatforms
+        platforms: platforms
       });
 
       // Results will come via onExtensionEvent listener
@@ -224,11 +258,10 @@ function AnalyzePage() {
               <button
                 type="button"
                 onClick={() => setScanMode('light')}
-                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
-                  scanMode === 'light'
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${scanMode === 'light'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
               >
                 <span className="flex items-center justify-center gap-2">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -240,11 +273,10 @@ function AnalyzePage() {
               <button
                 type="button"
                 onClick={() => setScanMode('deep')}
-                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
-                  scanMode === 'deep'
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+                className={`flex-1 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${scanMode === 'deep'
+                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/25'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
               >
                 <span className="flex items-center justify-center gap-2">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -255,11 +287,71 @@ function AnalyzePage() {
               </button>
             </div>
 
+            {/* Platform Selection (Deep Scan Only) */}
+            {scanMode === 'deep' && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-slate-700 mb-3">
+                  Select platforms to scan
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {Object.entries(PLATFORM_INFO).map(([key, { name, emoji }]) => (
+                    <label
+                      key={key}
+                      className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all duration-200 ${selectedPlatforms[key]
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                        }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedPlatforms[key]}
+                        onChange={() => togglePlatform(key)}
+                        className="sr-only"
+                      />
+                      <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center mr-3 transition-colors ${selectedPlatforms[key]
+                        ? 'bg-blue-600 border-blue-600'
+                        : 'border-slate-300'
+                        }`}>
+                        {selectedPlatforms[key] && (
+                          <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </span>
+                      <span className="text-lg mr-2">{emoji}</span>
+                      <span className="text-sm font-medium text-slate-700">{name}</span>
+                    </label>
+                  ))}
+                </div>
+                {scanPlatforms.length === 0 && (
+                  <p className="mt-2 text-sm text-red-500">Please select at least one platform</p>
+                )}
+
+                {/* Login Reminder */}
+                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+                  <div className="flex gap-3">
+                    <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div>
+                      <p className="text-sm text-amber-800 font-medium mb-1">
+                        For best results, log into your social media accounts first
+                      </p>
+                      <p className="text-xs text-amber-700">
+                        Deep scan uses your browser to search for profiles. Being logged in helps find more accurate results.
+                        <strong> We never store or access your login credentials</strong> — the extension only reads public profile information.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Submit Button */}
             <button
               type={scanMode === 'light' ? 'submit' : 'button'}
               onClick={scanMode === 'deep' ? handleDeepScan : undefined}
-              disabled={isLoading || !identifier.trim() || (scanMode === 'deep' && !extensionReady)}
+              disabled={isLoading || !identifier.trim() || (scanMode === 'deep' && (!extensionReady || scanPlatforms.length === 0))}
               className="w-full py-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-blue-600/25"
             >
               {isLoading ? (
@@ -288,7 +380,7 @@ function AnalyzePage() {
                 </svg>
                 <div className="flex-1">
                   <p className="text-sm text-amber-700 font-medium">Extension not connected</p>
-                  <button 
+                  <button
                     onClick={() => setShowExtensionSetup(true)}
                     className="mt-1 text-sm text-amber-700 underline hover:text-amber-800"
                   >

@@ -505,20 +505,24 @@ class PIIExposureAnalyzer:
                     f"Review your privacy settings to hide it."
                 )
         
-        # Location exposure recommendations
+        # Location exposure recommendations - show specific values
         location_items = [item for item in exposed_pii if item.get("type") == "location"]
-        if location_items:
+        for item in location_items:
+            platforms = ", ".join(item.get("platforms", []))
+            location_value = item.get("value", "")[:50]  # Truncate long values
             recommendations.append(
-                "📍 MEDIUM: Your location information is visible. "
-                "Consider whether you need to share precise location details publicly."
+                f"📍 MEDIUM: Your location \"{location_value}\" is visible on {platforms}. "
+                f"Consider whether you need to share this publicly."
             )
         
-        # Workplace exposure recommendations
+        # Workplace exposure recommendations - show specific values
         workplace_items = [item for item in exposed_pii if item.get("type") == "workplace"]
-        if workplace_items:
+        for item in workplace_items:
+            platforms = ", ".join(item.get("platforms", []))
+            workplace_value = item.get("value", "")[:50]  # Truncate long values
             recommendations.append(
-                "🏢 MEDIUM: Your workplace information is publicly visible. "
-                "This could be used for targeted phishing attacks. Review your privacy settings."
+                f"🏢 MEDIUM: Your workplace \"{workplace_value}\" is visible on {platforms}. "
+                f"This could be used for targeted phishing attacks."
             )
         
         # General recommendations based on risk level

@@ -1955,7 +1955,7 @@ async def enhanced_scan(request: EnhancedScanRequest) -> AnalysisReportResponse:
         username = user_identifiers.get("username", "")
         
         # Step 1: Scrape all platforms for profile data
-        platform_data = await scrape_all_platforms(username)
+        platform_data = await scrape_all_platforms(username, request.platforms)
         
         # Step 2: Analyze PII exposure
         exposure_report = exposure_analyzer.analyze(platform_data, user_identifiers)
@@ -2615,40 +2615,73 @@ async def deep_scan_analyze(request: DeepScanAnalyzeRequest) -> DeepScanAnalyzeR
                 f"Review privacy settings on {platforms_with_data} platform(s) where profiles were found"
             )
         
-        # PII-specific recommendations
-        pii_types_found = set(p.get("type") for p in unique_pii)
+        # Group PII by type for detailed recommendations
+        critical_pii = [p for p in unique_pii if p.get("risk_level") == "critical"]
+        high_pii = [p for p in unique_pii if p.get("risk_level") == "high"]
+        medium_pii = [p for p in unique_pii if p.get("risk_level") == "medium"]
         
-        if "emails" in pii_types_found or "email" in pii_types_found:
-            email_count = sum(1 for p in unique_pii if p.get("type") in ["emails", "email"])
-            recommendations.append(
-                f"🔴 CRITICAL: {email_count} email address(es) exposed - check if they've been in data breaches at haveibeenpwned.com"
-            )
+        # Add detailed critical PII recommendations with specific values
+        for item in critical_pii:
+            pii_type = item.get("type", "").replace("_", " ").replace("s", "", 1) if item.get("type", "").endswith("s") else item.get("type", "").replace("_", " ")
+            pii_value = item.get("value", "")
+            platform = item.get("platform_name", item.get("platform", "Unknown"))
+            source_url = item.get("source", "")
+            
+            # Truncate long values for display
+            display_value = pii_value[:50] + "..." if len(str(pii_value)) > 50 else pii_value
+            
+            if item.get("type") in ["phones", "phone"]:
+                recommendations.insert(0,
+                    f"🚨 CRITICAL: Your phone number \"{display_value}\" is publicly visible on {platform}. Remove it from your profile to prevent spam calls and scams."
+                )
+            elif item.get("type") in ["addresses", "address"]:
+                recommendations.insert(0,
+                    f"🚨 CRITICAL: Your address \"{display_value}\" is exposed on {platform}. Remove immediately to protect your physical safety."
+                )
+            elif item.get("type") in ["nationalIds", "national_id"]:
+                recommendations.insert(0,
+                    f"🚨 CRITICAL: Your National ID \"{display_value}\" is exposed on {platform}. This could lead to identity theft - remove immediately!"
+                )
         
-        if "phones" in pii_types_found or "phone" in pii_types_found:
-            phone_count = sum(1 for p in unique_pii if p.get("type") in ["phones", "phone"])
-            recommendations.append(
-                f"🔴 CRITICAL: {phone_count} phone number(s) exposed - remove from public profiles immediately"
-            )
+        # Add detailed high-risk PII recommendations
+        for item in high_pii:
+            pii_type = item.get("type", "").replace("_", " ")
+            pii_value = item.get("value", "")
+            platform = item.get("platform_name", item.get("platform", "Unknown"))
+            
+            display_value = pii_value[:50] + "..." if len(str(pii_value)) > 50 else pii_value
+            
+            if item.get("type") in ["emails", "email"]:
+                recommendations.append(
+                    f"⚠️ HIGH RISK: Your email \"{display_value}\" is visible on {platform}. Consider using a separate email for social media. Check haveibeenpwned.com for breaches."
+                )
+            elif item.get("type") in ["birthDates", "birthdate"]:
+                recommendations.append(
+                    f"⚠️ HIGH RISK: Your birth date \"{display_value}\" is exposed on {platform}. This is often used for account recovery attacks."
+                )
+            elif item.get("type") in ["coordinates", "location_coords"]:
+                recommendations.append(
+                    f"⚠️ HIGH RISK: Location coordinates found on {platform}. Disable location tagging on posts."
+                )
         
-        if "addresses" in pii_types_found or "address" in pii_types_found:
-            recommendations.append(
-                "🔴 CRITICAL: Physical address exposed - remove immediately to prevent privacy risks"
-            )
-        
-        if "nationalIds" in pii_types_found or "national_id" in pii_types_found:
-            recommendations.append(
-                "🔴 CRITICAL: National ID exposed - this could lead to identity theft. Remove immediately!"
-            )
-        
-        if "birthDates" in pii_types_found or "birthdate" in pii_types_found:
-            recommendations.append(
-                "⚠️ HIGH RISK: Birth date exposed - often used for account recovery and verification"
-            )
-        
-        if "coordinates" in pii_types_found:
-            recommendations.append(
-                "⚠️ HIGH RISK: Location coordinates exposed - disable location tagging on posts"
-            )
+        # Add medium-risk PII recommendations (grouped)
+        if medium_pii:
+            locations = [p for p in medium_pii if p.get("type") == "location"]
+            workplaces = [p for p in medium_pii if p.get("type") == "workplace"]
+            
+            if locations:
+                loc_platforms = set(p.get("platform_name", p.get("platform", "")) for p in locations)
+                loc_values = ", ".join(set(p.get("value", "")[:30] for p in locations[:3]))
+                recommendations.append(
+                    f"📍 MEDIUM: Location info \"{loc_values}\" visible on {', '.join(loc_platforms)}. Consider if you need to share precise location."
+                )
+            
+            if workplaces:
+                wp_platforms = set(p.get("platform_name", p.get("platform", "")) for p in workplaces)
+                wp_values = ", ".join(set(p.get("value", "")[:30] for p in workplaces[:2]))
+                recommendations.append(
+                    f"🏢 MEDIUM: Workplace \"{wp_values}\" visible on {', '.join(wp_platforms)}. This could be used for targeted phishing."
+                )
         
         # Risk level recommendations
         if risk_score >= 70:
@@ -2672,17 +2705,19 @@ async def deep_scan_analyze(request: DeepScanAnalyzeRequest) -> DeepScanAnalyzeR
                 "✅ No sensitive PII detected in public profiles - maintain good privacy practices"
             )
         else:
-            # Summary recommendation
-            critical_count = sum(1 for p in unique_pii if p.get("risk_level") == "critical")
-            high_count = sum(1 for p in unique_pii if p.get("risk_level") == "high")
+            # Add summary at the beginning
+            critical_count = len(critical_pii)
+            high_count = len(high_pii)
             
-            if critical_count > 0:
-                recommendations.insert(0, 
-                    f"🚨 URGENT: {critical_count} critical PII item(s) exposed - take action immediately!"
-                )
-            elif high_count > 0:
+            if critical_count > 0 or high_count > 0:
+                summary_parts = []
+                if critical_count > 0:
+                    summary_parts.append(f"{critical_count} critical")
+                if high_count > 0:
+                    summary_parts.append(f"{high_count} high-risk")
+                
                 recommendations.insert(0,
-                    f"Found {len(unique_pii)} PII item(s) including {high_count} high-risk item(s) - review and secure"
+                    f"🔍 EXPOSURE SUMMARY: Found {' and '.join(summary_parts)} PII item(s) across your profiles. See details below."
                 )
         
         # Generate report ID for PDF if requested

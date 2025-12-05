@@ -754,20 +754,29 @@ def get_scraper(platform: str) -> Optional[BasePlatformScraper]:
     return None
 
 
-async def scrape_all_platforms(username: str) -> Dict[str, Dict]:
+async def scrape_all_platforms(username: str, platforms: Optional[List[str]] = None) -> Dict[str, Dict]:
     """
     Scrape profile data from all supported platforms.
     
     Args:
         username: Username to scrape
+        platforms: Optional list of platforms to scrape (default: all)
         
     Returns:
         Dictionary with results from each platform
     """
     results = {}
     
+    # Filter scrapers based on requested platforms
+    target_scrapers = PLATFORM_SCRAPERS
+    if platforms:
+        target_scrapers = {
+            k: v for k, v in PLATFORM_SCRAPERS.items() 
+            if k in [p.lower() for p in platforms]
+        }
+    
     # Pre-instantiate scrapers for reuse
-    scrapers = {platform: scraper_class() for platform, scraper_class in PLATFORM_SCRAPERS.items()}
+    scrapers = {platform: scraper_class() for platform, scraper_class in target_scrapers.items()}
     
     for platform, scraper in scrapers.items():
         # First check if profile exists

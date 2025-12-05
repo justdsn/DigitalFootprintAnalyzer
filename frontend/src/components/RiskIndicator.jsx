@@ -29,6 +29,12 @@ function RiskIndicator({ score, level }) {
   const { t } = useLanguage();
 
   // ---------------------------------------------------------------------------
+  // Safe Value Extraction
+  // ---------------------------------------------------------------------------
+  const safeScore = typeof score === 'object' ? (score.value || 0) : (score || 0);
+  const safeLevel = typeof level === 'object' ? (level.value || level.level || 'low') : (level || 'low');
+
+  // ---------------------------------------------------------------------------
   // Risk Level Configuration
   // ---------------------------------------------------------------------------
   const riskConfig = {
@@ -58,7 +64,7 @@ function RiskIndicator({ score, level }) {
     },
   };
 
-  const config = riskConfig[level] || riskConfig.low;
+  const config = riskConfig[safeLevel] || riskConfig.low;
 
   // ---------------------------------------------------------------------------
   // Calculate Circle Progress
@@ -66,7 +72,7 @@ function RiskIndicator({ score, level }) {
   // SVG circle calculations
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (score / 100) * circumference;
+  const strokeDashoffset = circumference - (safeScore / 100) * circumference;
 
   // ---------------------------------------------------------------------------
   // Render
@@ -111,7 +117,7 @@ function RiskIndicator({ score, level }) {
           {/* Score Display in Center */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className={`text-4xl font-bold ${config.color}`}>
-              {score}
+              {safeScore}
             </span>
             <span className="text-sm text-gray-500">
               {t('results.risk.score')}
@@ -126,17 +132,17 @@ function RiskIndicator({ score, level }) {
           {/* Risk Level Badge */}
           <div className={`inline-flex items-center px-4 py-2 rounded-full ${config.lightBg} ${config.color} font-semibold mb-4`}>
             {/* Icon based on level */}
-            {level === 'low' && (
+            {safeLevel === 'low' && (
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             )}
-            {level === 'medium' && (
+            {safeLevel === 'medium' && (
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             )}
-            {level === 'high' && (
+            {safeLevel === 'high' && (
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -158,7 +164,7 @@ function RiskIndicator({ score, level }) {
             <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
               <div 
                 className={`h-full ${config.bgColor} rounded-full transition-all duration-1000 ease-out`}
-                style={{ width: `${score}%` }}
+                style={{ width: `${safeScore}%` }}
               />
             </div>
           </div>

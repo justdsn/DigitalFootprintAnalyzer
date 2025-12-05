@@ -91,8 +91,11 @@ window.addEventListener('message', async (event) => {
 
 // Listen for messages from background (scan progress updates)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  console.log('[WebApp Bridge] Received message from background:', message);
+  
   // Handle direct events
   if (message.event) {
+    console.log('[WebApp Bridge] Forwarding event to web app:', message.event, message.data);
     window.postMessage({
       source: 'dfa-extension',
       event: message.event,
@@ -102,6 +105,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   
   // Handle webappEvent wrapper
   if (message.action === 'webappEvent') {
+    console.log('[WebApp Bridge] Forwarding webappEvent to web app:', message.event, message.data);
     window.postMessage({
       source: 'dfa-extension',
       event: message.event,

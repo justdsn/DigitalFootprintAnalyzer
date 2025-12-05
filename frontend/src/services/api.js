@@ -23,10 +23,10 @@
 // =============================================================================
 
 // Base URL for API calls - uses environment variable or defaults to localhost
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8001/api';
 
 // Default request timeout in milliseconds
-const REQUEST_TIMEOUT = 30000;
+const REQUEST_TIMEOUT = 120000;
 
 // =============================================================================
 // ERROR CLASS
@@ -145,7 +145,7 @@ export async function analyze({ identifier, identifier_type }) {
   const body = {
     identifier: identifier.trim(),
   };
-  
+
   // Only include identifier_type if explicitly provided
   if (identifier_type) {
     body.identifier_type = identifier_type;
@@ -335,9 +335,9 @@ export async function transliterate(text, includeVariants = true) {
 
   return fetchWithTimeout(`${API_BASE_URL}/transliterate`, {
     method: 'POST',
-    body: JSON.stringify({ 
+    body: JSON.stringify({
       text: text.trim(),
-      include_variants: includeVariants 
+      include_variants: includeVariants
     }),
   });
 }

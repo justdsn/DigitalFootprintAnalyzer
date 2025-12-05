@@ -145,10 +145,12 @@ function TransliterationDisplay({
             <p className="text-xs text-purple-600 font-medium uppercase tracking-wider mb-1">
               {t('transliteration.original') || 'Original Text'}
             </p>
-            <p className="text-2xl font-medium text-purple-900">{original}</p>
+            <p className="text-2xl font-medium text-purple-900">
+              {typeof original === 'object' ? (original.value || original.text || JSON.stringify(original)) : original}
+            </p>
           </div>
           <button
-            onClick={() => handleCopy(original)}
+            onClick={() => handleCopy(typeof original === 'object' ? (original.value || original.text || JSON.stringify(original)) : original)}
             className="p-2 text-purple-500 hover:text-purple-700 hover:bg-purple-100 rounded-lg transition-colors"
             title="Copy original"
           >
@@ -173,41 +175,44 @@ function TransliterationDisplay({
           </p>
           
           <div className="flex flex-wrap gap-2">
-            {displayVariants.map((variant, index) => (
-              <div 
-                key={index}
-                className={`
-                  group inline-flex items-center px-4 py-2 rounded-lg border
-                  ${index === 0 
-                    ? 'bg-blue-50 border-blue-200 text-blue-800' 
-                    : 'bg-gray-50 border-gray-200 text-gray-700'
-                  }
-                  hover:shadow-sm transition-all
-                `}
-              >
-                <span className="font-medium">{variant}</span>
-                <button
-                  onClick={() => handleCopy(variant)}
-                  className="ml-2 p-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 transition-opacity"
-                  title="Copy"
+            {displayVariants.map((variant, index) => {
+              const variantText = typeof variant === 'object' ? (variant.value || variant.text || JSON.stringify(variant)) : variant;
+              return (
+                <div 
+                  key={index}
+                  className={`
+                    group inline-flex items-center px-4 py-2 rounded-lg border
+                    ${index === 0 
+                      ? 'bg-blue-50 border-blue-200 text-blue-800' 
+                      : 'bg-gray-50 border-gray-200 text-gray-700'
+                    }
+                    hover:shadow-sm transition-all
+                  `}
                 >
-                  {copiedText === variant ? (
-                    <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
+                  <span className="font-medium">{variantText}</span>
+                  <button
+                    onClick={() => handleCopy(variantText)}
+                    className="ml-2 p-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-600 transition-opacity"
+                    title="Copy"
+                  >
+                    {copiedText === variantText ? (
+                      <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      </svg>
+                    )}
+                  </button>
+                  {index === 0 && (
+                    <span className="ml-2 text-xs bg-blue-200 text-blue-700 px-2 py-0.5 rounded-full">
+                      {t('transliteration.primary') || 'Primary'}
+                    </span>
                   )}
-                </button>
-                {index === 0 && (
-                  <span className="ml-2 text-xs bg-blue-200 text-blue-700 px-2 py-0.5 rounded-full">
-                    {t('transliteration.primary') || 'Primary'}
-                  </span>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
 
           {/* Show More/Less Toggle */}
