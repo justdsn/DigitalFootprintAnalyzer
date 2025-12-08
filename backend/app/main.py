@@ -126,6 +126,10 @@ app.add_middleware(
 # Include API routes with /api prefix
 app.include_router(api_router, prefix="/api", tags=["Analysis"])
 
+# Include OSINT routes
+from app.api.routes.osint import router as osint_router
+app.include_router(osint_router, prefix="/api/osint", tags=["OSINT"])
+
 
 # =============================================================================
 # ROOT ENDPOINT

@@ -172,3 +172,10 @@ docker-compose.override.yml
 extension/*.zip
 extension/*.crx
 extension/*.pem
+
+# -----------------------------------------------------------------------------
+# OSINT Sessions
+# -----------------------------------------------------------------------------
+# Session files contain authentication cookies
+backend/app/osint/sessions/*.json
+!backend/app/osint/sessions/.gitkeep

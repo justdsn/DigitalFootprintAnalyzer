@@ -50,6 +50,12 @@ lxml>=5.1.0               # Fast XML/HTML parser backend for BeautifulSoup
 reportlab>=4.0.0          # PDF report generation
 
 # -----------------------------------------------------------------------------
+# Browser Automation (OSINT Data Collection)
+# -----------------------------------------------------------------------------
+playwright>=1.40.0        # Headless browser automation for OSINT
+playwright-stealth>=1.0.0 # Stealth plugin to avoid detection
+
+# -----------------------------------------------------------------------------
 # Utilities
 # -----------------------------------------------------------------------------
 python-multipart>=0.0.6   # Form data parsing

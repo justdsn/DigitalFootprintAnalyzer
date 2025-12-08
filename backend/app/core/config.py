@@ -142,6 +142,24 @@ class Settings(BaseSettings):
         "SriLankan Airlines"
     ]
     
+    # -------------------------------------------------------------------------
+    # OSINT Configuration
+    # -------------------------------------------------------------------------
+    # Playwright browser automation settings
+    OSINT_BROWSER_HEADLESS: bool = True
+    OSINT_BROWSER_TIMEOUT: int = 30000  # 30 seconds
+    OSINT_SESSION_DIR: str = "osint/sessions"  # Relative to backend/app/
+    OSINT_MAX_RETRIES: int = 3
+    OSINT_RETRY_DELAY: int = 2  # seconds
+    
+    # Google Custom Search API (optional - for profile discovery)
+    GOOGLE_API_KEY: str = ""
+    GOOGLE_CSE_ID: str = ""
+    
+    # Rate limiting for OSINT operations
+    OSINT_RATE_LIMIT_DELAY: float = 1.0  # seconds between requests
+    OSINT_MAX_CONCURRENT_COLLECTORS: int = 4
+    
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
