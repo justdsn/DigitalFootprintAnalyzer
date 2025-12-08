@@ -69,8 +69,8 @@ class IdentifierDetector:
         if ' ' in identifier:
             letter_count = sum(1 for c in identifier if c.isalpha() or c.isspace())
             if letter_count / len(identifier) >= 0.8:
-                parts = identifier.split()
-                if len(parts) >= 2 and all(part[0].isalpha() for part in parts if part):
+                parts = [p for p in identifier.split() if p]  # Filter empty parts first
+                if len(parts) >= 2 and all(part[0].isalpha() for part in parts):
                     return "name"
         
         # Default to username

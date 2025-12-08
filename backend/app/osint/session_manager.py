@@ -151,8 +151,11 @@ class SessionManager:
                 "storageState": storage_state
             }
             
-            with open(session_path, 'w') as f:
+            with open(session_path, 'w', encoding='utf-8') as f:
                 json.dump(session_data, f, indent=2)
+            
+            # Set restrictive file permissions (owner read/write only)
+            session_path.chmod(0o600)
             
             logger.info(f"Session saved for {platform}")
             return True
@@ -214,7 +217,7 @@ class SessionManager:
         result["exists"] = True
         
         try:
-            with open(session_path, 'r') as f:
+            with open(session_path, 'r', encoding='utf-8') as f:
                 session_data = json.load(f)
             
             if "metadata" in session_data:

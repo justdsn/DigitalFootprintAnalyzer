@@ -503,6 +503,15 @@ class OSINTOrchestrator:
         return int(score)
     
     def _assess_timeline_risk(self, profile: Dict[str, Any]) -> str:
-        """Assess timeline/posting risk level."""
-        # Simplified - would need post analysis in full implementation
+        """
+        Assess timeline/posting risk level.
+        
+        Note: This is a placeholder stub. Full implementation would require
+        analyzing post frequency, content types, and engagement patterns.
+        """
+        # TODO: Implement timeline analysis based on:
+        # - Post frequency
+        # - Content sensitivity
+        # - Engagement patterns
+        # - Temporal patterns
         return "medium"

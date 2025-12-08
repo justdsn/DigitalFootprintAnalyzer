@@ -254,7 +254,7 @@ class BaseCollector(ABC):
                     if element:
                         logger.warning(f"Login wall detected: {indicator}")
                         return True
-                except:
+                except Exception:
                     continue
             
             return False
