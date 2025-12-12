@@ -16,12 +16,15 @@ Components:
 - parsers: HTML parsing for profile data extraction
 - discovery: Profile discovery and URL generation
 - orchestrator: Main OSINT workflow controller
+- schemas: Pydantic models for data structures
 """
 
 from .session_manager import SessionManager
 from .orchestrator import OSINTOrchestrator
+from . import schemas
 
 __all__ = [
     "SessionManager",
     "OSINTOrchestrator",
+    "schemas",
 ]
