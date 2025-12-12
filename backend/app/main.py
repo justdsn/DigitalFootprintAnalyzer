@@ -18,11 +18,14 @@ This module initializes the FastAPI application with:
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from contextlib import asynccontextmanager
 import logging
+from app.core.logging_config import setup_structured_logging
 
-# Set up logging
-logging.basicConfig(level=logging.INFO)
+
+# Set up structured logging
+setup_structured_logging()
 logger = logging.getLogger(__name__)
 
 # Import API routes

@@ -29,12 +29,13 @@ Example Usage:
 """
 
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import asyncio
 import logging
 from playwright.async_api import async_playwright, Browser, BrowserContext, Page, TimeoutError as PlaywrightTimeoutError
 
 from app.core.config import settings
+import random
 from app.osint.session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
@@ -56,19 +57,37 @@ class BaseCollector(ABC):
         browser: Playwright browser instance
         context: Browser context with session
         page: Current page
+        user_agent: User-Agent string for this session
+        proxy: Proxy server (if any)
     """
-    
-    def __init__(self, session_manager: Optional[SessionManager] = None):
+    # List of common user agents (can be expanded)
+    USER_AGENTS: List[str] = [
+        # Chrome Win10
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        # Firefox Win10
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+        # Edge Win10
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+        # Mac Safari
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+        # Linux Chrome
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    ]
+
+    def __init__(self, session_manager: Optional[SessionManager] = None, user_agent: Optional[str] = None, proxy: Optional[str] = None):
         """
-        Initialize the base collector.
-        
+        Initialize the base collector with anti-bot/stealth options.
         Args:
             session_manager: Optional SessionManager instance
+            user_agent: Optional user-agent string (random if None)
+            proxy: Optional proxy server (e.g., 'http://user:pass@host:port')
         """
         self.session_manager = session_manager or SessionManager()
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
+        self.user_agent = user_agent or random.choice(self.USER_AGENTS)
+        self.proxy = proxy
     
     @abstractmethod
     def get_platform_name(self) -> str:
@@ -92,32 +111,64 @@ class BaseCollector(ABC):
             
             playwright = await async_playwright().start()
             
-            # Launch browser
-            self.browser = await playwright.chromium.launch(
-                headless=settings.OSINT_BROWSER_HEADLESS
-            )
-            
-            # Create context with or without session
+            # Launch browser with stealthy args
+            launch_args = {
+                "headless": settings.OSINT_BROWSER_HEADLESS,
+                "args": [
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-infobars",
+                    "--disable-web-security",
+                    "--disable-features=IsolateOrigins,site-per-process",
+                ]
+            }
+            if self.proxy:
+                launch_args["proxy"] = {"server": self.proxy}
+
+            self.browser = await playwright.chromium.launch(**launch_args)
+
+            # Context options for stealth
+            context_args = {
+                "user_agent": self.user_agent,
+                "viewport": {"width": 1280, "height": 800},
+                "java_script_enabled": True,
+            }
             if storage_state:
                 logger.info(f"Loading session for {platform}")
-                self.context = await self.browser.new_context(
-                    storage_state=storage_state
-                )
+                context_args["storage_state"] = storage_state
             else:
                 logger.warning(f"No session available for {platform}, using anonymous mode")
-                self.context = await self.browser.new_context()
-            
-            # Set timeout
+
+            self.context = await self.browser.new_context(**context_args)
             self.context.set_default_timeout(settings.OSINT_BROWSER_TIMEOUT)
-            
-            # Create page
             self.page = await self.context.new_page()
-            
-            logger.info(f"Browser initialized for {platform}")
-            
+
+            # Manual stealth patches (navigator, plugins, webdriver, etc.)
+            await self._apply_stealth(self.page)
+
+            logger.info(f"Browser initialized for {platform} with stealth and user-agent: {self.user_agent}")
+
         except Exception as e:
             logger.error(f"Error initializing browser for {platform}: {e}")
             raise
+
+    async def _apply_stealth(self, page: Page):
+        """
+        Apply manual stealth patches to evade bot detection.
+        """
+        try:
+            # Remove webdriver property
+            await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            # Fake plugins and languages
+            await page.add_init_script("Object.defineProperty(navigator, 'plugins', {get: () => [1,2,3,4,5]})")
+            await page.add_init_script("Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']})")
+            # Fake chrome object
+            await page.add_init_script("window.chrome = { runtime: {} }")
+            # WebGL vendor spoof
+            await page.add_init_script("const getParameter = WebGLRenderingContext.prototype.getParameter; WebGLRenderingContext.prototype.getParameter = function(parameter) { if (parameter === 37445) { return 'Intel Inc.'; } if (parameter === 37446) { return 'Intel Iris OpenGL Engine'; } return getParameter(parameter); }")
+            # Audio spoof
+            await page.add_init_script("const getChannelData = AudioBuffer.prototype.getChannelData; AudioBuffer.prototype.getChannelData = function() { const results = getChannelData.apply(this, arguments); for (let i = 0; i < results.length; ++i) { results[i] = results[i] + 0.0000001; } return results; }")
+        except Exception as e:
+            logger.warning(f"Stealth patch failed: {e}")
     
     async def close_browser(self) -> None:
         """
@@ -136,13 +187,15 @@ class BaseCollector(ABC):
         except Exception as e:
             logger.error(f"Error closing browser: {e}")
     
-    async def navigate_to_url(self, url: str, wait_for_selector: Optional[str] = None) -> bool:
+    async def navigate_to_url(self, url: str, wait_for_selector: Optional[str] = None, min_delay: float = 1.0, max_delay: float = 3.0) -> bool:
         """
         Navigate to a URL and optionally wait for a selector.
         
         Args:
             url: URL to navigate to
             wait_for_selector: CSS selector to wait for (optional)
+            min_delay: Minimum random delay after navigation (seconds)
+            max_delay: Maximum random delay after navigation (seconds)
         
         Returns:
             True if navigation successful, False otherwise
@@ -161,8 +214,10 @@ class BaseCollector(ABC):
                 await self.page.wait_for_selector(wait_for_selector, timeout=10000)
                 logger.info(f"Selector found: {wait_for_selector}")
             
-            # Add small delay to ensure content is loaded
-            await asyncio.sleep(settings.OSINT_RATE_LIMIT_DELAY)
+            # Add random delay to ensure content is loaded and evade bot detection
+            delay = random.uniform(min_delay, max_delay)
+            await asyncio.sleep(delay)
+            logger.debug(f"Randomized delay after navigation: {delay:.2f}s")
             
             return True
             
