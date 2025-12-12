@@ -15,12 +15,18 @@ Endpoints:
 """
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel, Field
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 import logging
 
 from app.osint.orchestrator import OSINTOrchestrator
 from app.osint.session_manager import SessionManager
+from app.osint.schemas import (
+    OSINTAnalyzeRequest,
+    OSINTAnalyzeResponse,
+    SessionValidateRequest,
+    SessionStatus,
+    SessionsStatusResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -29,91 +35,6 @@ router = APIRouter()
 # Initialize services
 orchestrator = OSINTOrchestrator()
 session_manager = SessionManager()
-
-
-# =============================================================================
-# REQUEST/RESPONSE MODELS
-# =============================================================================
-
-class OSINTAnalyzeRequest(BaseModel):
-    """Request model for OSINT analysis."""
-    identifier: str = Field(..., description="Username, email, name, or phone number")
-    platforms: Optional[List[str]] = Field(
-        None,
-        description="List of platforms to check (default: all)"
-    )
-    use_search: bool = Field(
-        False,
-        description="Use Google Custom Search for profile discovery"
-    )
-
-
-class ProfileAnalysis(BaseModel):
-    """Profile analysis results."""
-    username_similarity: int
-    bio_similarity: int
-    pii_exposure_score: int
-    timeline_risk: str
-    impersonation_score: int
-
-
-class ProfileData(BaseModel):
-    """Profile data from a platform."""
-    platform: str
-    url: str
-    username: Optional[str] = None
-    name: Optional[str] = None
-    bio: Optional[str] = None
-    pii: Dict[str, List[str]]
-    followers: Optional[int] = None
-    following: Optional[int] = None
-    location: Optional[str] = None
-    job_title: Optional[str] = None
-    profile_metadata: Dict[str, Any] = {}
-    analysis: ProfileAnalysis
-
-
-class OverallRisk(BaseModel):
-    """Overall risk assessment."""
-    exposure: str
-    impersonation: str
-    score: int = 0
-    profiles_analyzed: int = 0
-
-
-class OSINTAnalyzeResponse(BaseModel):
-    """Response model for OSINT analysis."""
-    input: str
-    identifier_type: str
-    username: str
-    timestamp: str
-    profiles_found: List[Dict[str, Any]]
-    correlation: Dict[str, Any] = {}
-    overall_risk: OverallRisk
-    processing_time_ms: float
-
-
-class SessionValidateRequest(BaseModel):
-    """Request model for session validation."""
-    platform: str = Field(..., description="Platform to validate")
-
-
-class SessionStatus(BaseModel):
-    """Session status information."""
-    platform: str
-    exists: bool
-    valid: bool
-    age_days: Optional[int] = None
-    expires_in_days: Optional[int] = None
-    error: Optional[str] = None
-
-
-class SessionsStatusResponse(BaseModel):
-    """Response model for sessions status."""
-    sessions: Dict[str, SessionStatus]
-    healthy_count: int
-    expired_count: int
-    missing_count: int
 
 
 # =============================================================================
