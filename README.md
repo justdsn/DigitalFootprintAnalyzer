@@ -1,65 +1,159 @@
-Phase-1
-# 🔍 Digital Footprint Analyzer [RP] 
+
+# 🔍 Digital Footprint Analyzer
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![React 18](https://img.shields.io/badge/React-18-blue.svg)](https://reactjs.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-green.svg)](https://fastapi.tiangolo.com/)
 
-A **Sri Lanka-focused OSINT (Open Source Intelligence) web application** that helps ordinary users (non-technical citizens) understand their digital footprint across social media platforms.
+A **Sri Lanka-focused OSINT (Open Source Intelligence) web application** for privacy awareness, impersonation detection, and risk assessment across social media platforms.
 
-## Overview
+---
 
-Digital Footprint Analyzer is designed to help Sri Lankan citizens:
+## 🌟 Key Features
 
-1. **Discover Personal Information Exposure** - Find out what personal information you've accidentally exposed on social media (emails, phone numbers, locations, etc.)
+- **Playwright-based OSINT backend**: Automated, authenticated scraping for Instagram, Facebook, LinkedIn, and X (Twitter) using persistent sessions.
+- **Advanced anti-bot/stealth**: User-agent rotation, stealth patches, proxy support, and randomized delays for robust scraping.
+- **Session management**: Persistent, health-checked browser sessions for each platform, with API endpoints for validation and monitoring.
+- **PII & NER extraction**: Detect emails, Sri Lankan phone numbers, URLs, mentions, names, locations, and organizations in any text.
+- **Username analysis**: Generate platform URLs, impersonation variations, and pattern analysis for usernames.
+- **Risk scoring**: Privacy risk assessment and actionable recommendations.
+- **Structured logging**: JSON logs for easy monitoring and production readiness.
+- **Internationalization**: English and Sinhala UI support.
+- **Docker & deployment ready**: Full Docker, Compose, and environment variable support.
 
-2. **Detect Potential Impersonation** - Check for fake profiles or accounts that might be impersonating you across major platforms
+---
 
-3. **Assess Privacy Risks** - Get a risk assessment score and actionable recommendations to improve your online privacy
+## 🏗️ Architecture Overview
 
-## Features
+**Backend**: Python 3.10+, FastAPI, Playwright, spaCy, Pydantic, Uvicorn
 
-### 🎯 Scanning Modes
+**Frontend**: React 18, Tailwind CSS, Context API, i18n
 
-#### Light Scan
-- **Backend-based analysis** - Fast, automated analysis using public data
-- **No extension required** - Works directly in the web browser
-- **Multiple identifier types** - Analyzes usernames, emails, phone numbers, or names
-- **Platform URL generation** - Direct links to potential profiles
+**Session Management**: JSON-based Playwright sessions, validated and monitored via API
 
-#### Deep Scan (Chrome Extension)
-- **Live data extraction** - Scrapes actual social media profiles in real-time
-- **Automated workflow** - One-click scanning from the web app
-- **Multi-platform support** - Facebook, Instagram, LinkedIn, and X (Twitter)
-- **Direct integration** - Extension communicates with web app automatically
-- **Comprehensive results** - Extracts profile data, PII, and generates risk assessment
+**Anti-bot/Stealth**: User-agent rotation, stealth scripts, proxy, delays (see `BaseCollector`)
 
-### PII (Personally Identifiable Information) Extraction
-- **Email Detection** - RFC 5322 compliant email pattern matching
-- **Sri Lankan Phone Numbers** - Support for local (07X-XXXXXXX) and international (+94) formats
-- **URL Extraction** - General and social media platform-specific URL detection
-- **@Mention Detection** - Social media handle extraction
+**Logging**: Structured JSON logging via `python-json-logger`
 
-### 🇱🇰 Sri Lankan Context
-- **Local Phone Formats** - Full support for Sri Lankan mobile number formats with E.164 normalization
-- **Sri Lankan Names** - Recognition of common family names (Perera, Silva, Fernando, Bandara, etc.)
-- **Local Cities** - NER support for major Sri Lankan cities (Colombo, Kandy, Galle, Jaffna, etc.)
-- **Local Organizations** - Recognition of Sri Lankan companies and institutions
+---
 
-### Username Analysis
-- **Platform URL Generation** - Direct links to profiles on Facebook, Instagram, X (Twitter), LinkedIn, TikTok, YouTube
-- **Username Variations** - Generate potential impersonation usernames to monitor
-- **Pattern Analysis** - Detect suspicious username patterns that might indicate fake accounts
+## 📁 Project Structure (Key Parts)
 
-### Named Entity Recognition (NER)
-- **Person Detection** - Identify names in text
-- **Location Recognition** - Detect cities, countries, and places
-- **Organization Identification** - Find company and institution names
+```
+DigitalFootprintAnalyzer/
+├── backend/
+│   ├── app/
+│   │   ├── main.py               # FastAPI app entry
+│   │   ├── api/routes/osint.py   # OSINT endpoints
+│   │   ├── osint/collectors/     # Playwright collectors (per platform)
+│   │   ├── osint/session_manager.py # Session management
+│   │   ├── osint/orchestrator.py # Scraping/analysis pipeline
+│   │   ├── services/             # NLP, PII, NER, correlation
+│   │   ├── core/logging_config.py# Structured logging setup
+│   │   └── ...
+│   ├── tests/                    # Unit/integration tests
+│   ├── requirements.txt
+│   ├── Dockerfile
+│   └── DEPLOYMENT.md             # Deployment & env guide
+├── frontend/                     # React app
+│   └── ...
+├── docker-compose.yml
+└── README.md
+```
 
-### Internationalization (i18n)
-- **English** - Full English language support
-- **Sinhala (සිංහල)** - Complete Sinhala translation for all UI text
+---
+
+## 🚀 Quickstart
+
+### 1. Docker (Recommended)
+
+```sh
+git clone https://github.com/justdsn/DigitalFootprintAnalyzer.git
+cd DigitalFootprintAnalyzer
+docker-compose up --build
+```
+- Frontend: http://localhost:3000
+- Backend: http://localhost:8000
+- API Docs: http://localhost:8000/docs
+
+### 2. Manual Backend Setup
+
+```sh
+cd backend
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+pip install -r requirements.txt
+python -m playwright install chromium
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+---
+
+## 🔑 Environment Variables (see DEPLOYMENT.md)
+
+| Variable                | Description                                 |
+|-------------------------|---------------------------------------------|
+| `OSINT_SESSION_DIR`     | Directory for session JSONs                 |
+| `OSINT_BROWSER_HEADLESS`| Run Playwright headless (true/false)        |
+| `OSINT_BROWSER_TIMEOUT` | Browser/page timeout (ms)                   |
+| `OSINT_RATE_LIMIT_DELAY`| Min delay between requests (s)               |
+| `OSINT_MAX_RETRIES`     | Max retries for collection                  |
+| `OSINT_RETRY_DELAY`     | Delay between retries (s)                    |
+| `CORS_ORIGINS`          | Allowed frontend origins (comma-separated)   |
+| `LOG_LEVEL`             | Logging level (`INFO`, `DEBUG`, etc.)       |
+
+---
+
+## 🛡️ API Highlights
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/osint/analyze` | Main OSINT analysis (scraping + NLP) |
+| `GET`  | `/api/osint/sessions/status` | Session health for all platforms |
+| `POST` | `/api/osint/sessions/validate` | Validate a specific session |
+
+See `/docs` for full OpenAPI documentation after starting the backend.
+
+---
+
+## 🧪 Testing
+
+```sh
+cd backend
+.venv\Scripts\activate
+pytest tests/
+```
+
+---
+
+## 📝 Deployment & Operations
+
+See `backend/DEPLOYMENT.md` for full deployment, environment, and troubleshooting instructions.
+
+---
+
+## 📅 Roadmap
+
+- [x] Playwright-based backend collectors (all platforms)
+- [x] Session management & health monitoring
+- [x] Anti-bot/stealth scraping
+- [x] Structured logging
+- [x] Full test coverage
+- [x] Docker/Compose deployment
+- [ ] Data breach integration
+- [ ] User accounts & saved analyses
+- [ ] Mobile app & Tamil support
+
+---
+
+## ⚠️ Disclaimer
+
+This tool is for privacy awareness and educational use only. It analyzes only publicly available information. Use responsibly and in compliance with all laws and platform terms.
+
+---
+
+<p align="center">🇱🇰</p>
 
 ## Tech Stack
 
