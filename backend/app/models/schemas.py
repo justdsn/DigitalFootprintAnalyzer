@@ -2059,7 +2059,7 @@ class ScanOptionsResponse(BaseModel):
             "deep_scan": {
                 "name": "Deep Scan",
                 "description": "Comprehensive analysis...",
-                "requires_extension": true
+                "available": true
             }
         }
     """
@@ -2077,14 +2077,13 @@ class DeepScanResponse(BaseModel):
     """
     Response model for deep scan placeholder endpoint.
     
-    Indicates that deep scan requires the browser extension.
+    Indicates that deep scan is now available via OSINT system.
     
     Example:
         {
             "success": false,
-            "message": "Deep Scan requires the browser extension...",
-            "extension_required": true,
-            "extension_info": {...}
+            "message": "Deep Scan is now available via OSINT system...",
+            "osint_available": true
         }
     """
     success: bool = Field(
@@ -2095,24 +2094,16 @@ class DeepScanResponse(BaseModel):
         ...,
         description="Message explaining why deep scan wasn't performed"
     )
-    extension_required: bool = Field(
-        default=True,
-        description="Whether the browser extension is required"
-    )
-    extension_info: Dict[str, str] = Field(
-        ...,
-        description="Information about the required extension"
-    )
 
 
 # =============================================================================
-# DEEP SCAN ANALYZE MODELS (Browser Extension Integration)
+# DEEP SCAN ANALYZE MODELS (OSINT Integration)
 # =============================================================================
 
 class ExtractedProfileData(BaseModel):
     """
-    Profile data extracted by the browser extension content scripts.
-    
+    Profile data extracted by the OSINT collectors.
+
     Attributes:
         platform: Platform identifier (facebook, instagram, linkedin, x)
         name: Display name from profile
@@ -2181,11 +2172,11 @@ class DeepScanAnalyzeRequest(BaseModel):
     """
     Request model for deep scan analyze endpoint.
     
-    Receives data collected by the browser extension and processes it
+    Receives data collected by the OSINT system and processes it
     for comprehensive analysis.
     
     Attributes:
-        scan_id: Unique scan identifier from extension
+        scan_id: Unique scan identifier from OSINT system
         identifier_type: Type of identifier searched (name, email, username)
         identifier_value: The value that was searched
         platforms_scanned: List of platforms that were scanned
@@ -2206,7 +2197,7 @@ class DeepScanAnalyzeRequest(BaseModel):
     scan_id: str = Field(
         ...,
         min_length=1,
-        description="Unique scan identifier from extension"
+        description="Unique scan identifier from OSINT system"
     )
     identifier_type: str = Field(
         ...,
@@ -2247,7 +2238,7 @@ class DeepScanAnalyzeResponse(BaseModel):
     """
     Response model for deep scan analyze endpoint.
     
-    Returns comprehensive analysis of the extension-collected data.
+    Returns comprehensive analysis of the OSINT-collected data.
     
     Attributes:
         success: Whether analysis was successful

@@ -85,7 +85,7 @@ from app.models.schemas import (
     PlatformDorkResults,
     ScanOptionsResponse,
     DeepScanResponse,
-    # Deep Scan Analyze schemas (Browser Extension)
+    # Deep Scan Analyze schemas (OSINT Integration)
     DeepScanAnalyzeRequest,
     DeepScanAnalyzeResponse,
 )
@@ -2295,10 +2295,10 @@ async def get_scan_options() -> ScanOptionsResponse:
         deep_scan={
             "name": "Deep Scan",
             "description": (
-                "Comprehensive analysis using browser extension for detailed "
+                "Comprehensive analysis using OSINT system for detailed "
                 "profile data extraction and verification."
             ),
-            "requires_extension": True,
+            "available": True,
             "supported_identifiers": ["name", "email", "username"],
             "platforms": ["facebook", "instagram", "linkedin", "x"],
             "features": [
@@ -2307,7 +2307,7 @@ async def get_scan_options() -> ScanOptionsResponse:
                 "Extended data extraction",
                 "Impersonation detection"
             ],
-            "status": "Extension required"
+            "status": "Available via OSINT"
         }
     )
 
@@ -2315,69 +2315,56 @@ async def get_scan_options() -> ScanOptionsResponse:
 @router.post(
     "/deep-scan",
     response_model=DeepScanResponse,
-    summary="Deep Scan (Placeholder)",
+    summary="Deep Scan (OSINT Available)",
     description="""
-    Placeholder endpoint for Deep Scan functionality.
+    Deep Scan functionality is now available via OSINT system.
     
-    Deep Scan requires the browser extension for comprehensive analysis.
-    This endpoint returns information about the extension requirement.
+    Use /api/osint/analyze endpoint for comprehensive analysis.
+    This endpoint provides information about OSINT availability.
     """
 )
 async def deep_scan(request: LightScanRequest) -> DeepScanResponse:
     """
-    Deep scan placeholder endpoint.
+    Deep scan availability endpoint.
     
-    Returns a message indicating that the browser extension is required.
+    Returns a message indicating that deep scan is available via OSINT.
     
     Args:
         request: LightScanRequest (same as light scan for consistency)
     
     Returns:
-        DeepScanResponse: Message about extension requirement
+        DeepScanResponse: Message about OSINT availability
     """
     return DeepScanResponse(
         success=False,
         message=(
-            "Deep Scan requires the Digital Footprint Analyzer browser extension. "
-            "The extension provides comprehensive profile analysis including "
-            "detailed data extraction, profile verification, and impersonation detection. "
-            "Please install the extension to use Deep Scan functionality."
-        ),
-        extension_required=True,
-        extension_info={
-            "name": "Digital Footprint Analyzer Extension",
-            "description": (
-                "Browser extension for comprehensive social media profile analysis"
-            ),
-            "status": "Coming Soon",
-            "features": (
-                "Profile verification, Extended data extraction, "
-                "Impersonation detection, Cross-platform correlation"
-            )
-        }
+            "Deep Scan is now available via the OSINT system. "
+            "Use the /api/osint/analyze endpoint for comprehensive profile analysis including "
+            "detailed data extraction, profile verification, and impersonation detection."
+        )
     )
 
 
 # =============================================================================
-# DEEP SCAN ANALYZE ENDPOINT (Browser Extension Integration)
+# DEEP SCAN ANALYZE ENDPOINT (OSINT Integration)
 # =============================================================================
 
 @router.post(
     "/deep-scan/analyze",
     response_model=DeepScanAnalyzeResponse,
-    summary="Analyze Deep Scan Results from Extension",
+    summary="Analyze Deep Scan Results from OSINT",
     description="""
-    Process and analyze data collected by the browser extension during a deep scan.
+    Process and analyze data collected by the OSINT system during a deep scan.
     
     This endpoint:
-    1. Receives profile data extracted by content scripts
+    1. Receives profile data extracted by OSINT collectors
     2. Analyzes PII exposure across platforms
     3. Detects impersonation risks
     4. Calculates overall risk score
     5. Generates recommendations
     6. Optionally creates a downloadable PDF report
     
-    The extension sends:
+    The OSINT system sends:
     - Scan metadata (ID, duration, platforms)
     - Profile data for each platform
     - Extracted PII from visible content
@@ -2387,10 +2374,10 @@ async def deep_scan(request: LightScanRequest) -> DeepScanResponse:
 )
 async def deep_scan_analyze(request: DeepScanAnalyzeRequest) -> DeepScanAnalyzeResponse:
     """
-    Analyze deep scan results from browser extension.
+    Analyze deep scan results from OSINT system.
     
     Args:
-        request: DeepScanAnalyzeRequest containing extension-collected data
+        request: DeepScanAnalyzeRequest containing OSINT-collected data
     
     Returns:
         DeepScanAnalyzeResponse: Comprehensive analysis results
@@ -2423,7 +2410,7 @@ async def deep_scan_analyze(request: DeepScanAnalyzeRequest) -> DeepScanAnalyzeR
             "value": request.identifier_value
         }
         
-        # Process results from extension
+        # Process results from OSINT system
         platform_summary = {}
         all_profiles = []
         all_pii = []

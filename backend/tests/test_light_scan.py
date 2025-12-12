@@ -613,4 +613,4 @@ class TestIntegration:
         )
         
         assert result["deep_scan_available"] is True
-        assert "extension" in result["deep_scan_message"].lower() or "deep scan" in result["deep_scan_message"].lower()
+        assert "osint" in result["deep_scan_message"].lower() or "deep scan" in result["deep_scan_message"].lower()

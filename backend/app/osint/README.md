@@ -93,6 +93,21 @@ Sessions must be created manually by logging into each platform:
 
 2. Save the session file as `{platform}_session.json` in `app/osint/sessions/`
 
+### Create Session Helper (CLI)
+
+To simplify session creation, use the included CLI helper which opens a Playwright browser and saves the resulting storage state after you log in manually.
+
+```
+python backend/app/osint/tools/create_session.py --platform instagram --headless false
+```
+
+Notes:
+- Supported platforms: `instagram`, `facebook`, `linkedin`, `twitter`.
+- Do not commit session JSON files to the repository. Store them securely.
+- On Windows, the script attempts to set restrictive file permissions but OS-specific behavior may differ.
+ - Optional automated login: supply `--username` and `--password` (or omit password to be prompted securely). Use with caution — do not expose credentials.
+
+
 ### Session File Format
 
 ```json
