@@ -48,10 +48,10 @@ function Footer() {
           <div>
             <h4 className="text-white font-semibold mb-4 text-sm">Contact</h4>
             <a 
-              href="mailto:contact@footprintlk.com" 
+              href="mailto:footprintlk12@gmail.com" 
               className="text-sm hover:text-white transition-colors"
             >
-              contact@footprintlk.com
+              footprintlk12@gmail.com
             </a>
           </div>
         </div>
@@ -59,7 +59,7 @@ function Footer() {
         {/* Bottom */}
         <div className="mt-12 pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-slate-500">
-            © {new Date().getFullYear()} FootprintLK. Made with ❤️ in Sri Lanka.
+            © 2026 FootprintLK. Made with ❤️ in Sri Lanka.
           </p>
           <div className="flex items-center gap-4">
             <span className="text-xs text-slate-600">

@@ -26,7 +26,7 @@ function HomePage() {
           {/* Main Heading */}
           <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-slate-900 leading-tight mb-6">
             Discover Your
-            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600">
+            <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-indigo-600" style={{ WebkitTextStroke: '0.5px #1e293b', paddingBottom: '0.1em', lineHeight: 1 }}>
               Digital Footprint
             </span>
           </h1>

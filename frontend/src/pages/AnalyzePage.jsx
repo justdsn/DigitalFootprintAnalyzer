@@ -327,23 +327,7 @@ function AnalyzePage() {
                   <p className="mt-2 text-sm text-red-500">Please select at least one platform</p>
                 )}
 
-                {/* Login Reminder */}
-                <div className="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-                  <div className="flex gap-3">
-                    <svg className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <div>
-                      <p className="text-sm text-amber-800 font-medium mb-1">
-                        For best results, log into your social media accounts first
-                      </p>
-                      <p className="text-xs text-amber-700">
-                        Deep scan uses your browser to search for profiles. Being logged in helps find more accurate results.
-                        <strong> We never store or access your login credentials</strong> — the extension only reads public profile information.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                {/* Login Reminder removed as per request */}
               </div>
             )}
 
@@ -374,20 +358,7 @@ function AnalyzePage() {
 
             {/* Extension Warning */}
             {scanMode === 'deep' && !extensionReady && (
-              <div className="mt-4 bg-amber-50 border border-amber-100 rounded-xl p-4 flex items-start gap-3">
-                <svg className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                </svg>
-                <div className="flex-1">
-                  <p className="text-sm text-amber-700 font-medium">Extension not connected</p>
-                  <button
-                    onClick={() => setShowExtensionSetup(true)}
-                    className="mt-1 text-sm text-amber-700 underline hover:text-amber-800"
-                  >
-                    Setup Extension Now
-                  </button>
-                </div>
-              </div>
+              {/* Extension warning removed as per request */}
             )}
           </form>
 
