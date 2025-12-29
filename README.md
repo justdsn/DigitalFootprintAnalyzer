@@ -30,32 +30,6 @@ A **Sri Lanka-focused OSINT (Open Source Intelligence) solution** for privacy aw
 
 ---
 
-## Project Structure (Excerpt)
-```
-DigitalFootprintAnalyzer/
-├── backend/
-│   ├── app/
-│   │   ├── main.py               # FastAPI app entry
-│   │   ├── api/routes/osint.py   # OSINT endpoints
-│   │   ├── osint/collectors/     # Playwright collectors
-│   │   └── ...                   # NLP, NER, logging, etc
-│   ├── tests/                    # Backend tests
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── DEPLOYMENT.md
-├── frontend/                     # React app
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   └── ...
-│   └── ...
-├── extension/                    # (optional) Chrome extension
-├── docker-compose.yml
-└── README.md
-```
-
----
-
 ## Getting Started
 
 ### Docker (Recommended)
