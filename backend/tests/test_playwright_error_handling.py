@@ -147,8 +147,10 @@ class TestPlaywrightErrorHandling:
         assert 'playwright>=1.42.0' in content, \
             "Should pin Playwright to 1.42.0+"
         
-        # Check for Python 3.13 warning
-        assert 'Python 3.13' in content or 'CRITICAL' in content, \
+        # Check for Python 3.13 warning - test both markers separately
+        has_python_warning = 'Python 3.13' in content
+        has_critical_marker = 'CRITICAL' in content
+        assert has_python_warning, \
             "Should include warning about Python 3.13"
         
         # Check for installation instructions

@@ -210,12 +210,12 @@ class OSINTOrchestrator:
         # If ALL platforms failed due to browser issues, raise error
         if browser_init_failures == len(platform_names):
             raise RuntimeError(
-                "All platform data collection failed due to browser initialization errors. "
-                "This is likely due to Playwright not being properly installed or Python 3.13 compatibility issues. "
-                "Solutions: "
-                "1. Run 'playwright install chromium' "
-                "2. Use Python 3.11.x or 3.12.x instead of Python 3.13 "
-                "3. Check logs for detailed error messages"
+                "All platform data collection failed due to browser initialization errors.\n"
+                "This is likely due to Playwright not being properly installed or Python 3.13 compatibility issues.\n\n"
+                "Solutions:\n"
+                "  1. Run 'playwright install chromium'\n"
+                "  2. Use Python 3.11.x or 3.12.x instead of Python 3.13\n"
+                "  3. Check logs for detailed error messages"
             )
         
         # If no platforms succeeded, log warning

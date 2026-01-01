@@ -166,8 +166,9 @@ class BaseCollector(ABC):
                     await self.context.close()
                 if self.browser:
                     await self.browser.close()
-            except Exception:
-                pass
+            except Exception as cleanup_error:
+                # Log cleanup failures but don't raise - we're already handling an error
+                logger.debug(f"Error during cleanup: {cleanup_error}")
             
             # Re-raise with more context
             raise RuntimeError(
