@@ -20,6 +20,7 @@ Main controller that orchestrates the entire OSINT workflow:
 
 import asyncio
 import logging
+import re
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -269,6 +270,35 @@ class OSINTOrchestrator:
                 # Extract PII from bio and text
                 bio_text = profile.get("bio") or ""
                 pii_data = self.pii_extractor.extract_all(bio_text)
+                
+                # Also check for URLs in bio
+                if profile.get("urls"):
+                    if "urls" not in pii_data:
+                        pii_data["urls"] = []
+                    pii_data["urls"].extend(profile.get("urls", []))
+                    # Deduplicate
+                    pii_data["urls"] = list(set(pii_data["urls"]))
+                
+                # Extract email/phone from bio if present (additional patterns)
+                if bio_text:
+                    # Email pattern - comprehensive
+                    emails = re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', bio_text)
+                    if emails:
+                        if "emails" not in pii_data:
+                            pii_data["emails"] = []
+                        pii_data["emails"].extend(emails)
+                        pii_data["emails"] = list(set(pii_data["emails"]))
+                    
+                    # Phone pattern (international) - various formats
+                    # Matches: +1-555-123-4567, (555) 123-4567, +44 20 1234 5678, etc.
+                    phones = re.findall(r'[\+\(]?[1-9][0-9 .\-\(\)]{8,}[0-9]', bio_text)
+                    if phones:
+                        if "phones" not in pii_data:
+                            pii_data["phones"] = []
+                        # Clean up phone numbers
+                        cleaned_phones = [p.strip() for p in phones if len(re.sub(r'[^\d]', '', p)) >= 10]
+                        pii_data["phones"].extend(cleaned_phones)
+                        pii_data["phones"] = list(set(pii_data["phones"]))
                 
                 # Run NER on bio and name
                 combined_text = f"{profile.get('name', '')} {bio_text}"

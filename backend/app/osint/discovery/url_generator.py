@@ -110,3 +110,36 @@ class URLGenerator:
         
         # Deduplicate and return
         return list(set(variations))
+    
+    @staticmethod
+    def generate_search_url(platform: str, query: str) -> str:
+        """
+        Generate a search URL to find multiple profiles.
+        
+        Use this to find impersonation accounts and similar profiles.
+        
+        Args:
+            platform: Platform name (lowercase)
+            query: Search query
+        
+        Returns:
+            Search URL for the platform
+        
+        Raises:
+            ValueError: If platform doesn't support search
+        """
+        platform = platform.lower()
+        query = query.strip()
+        
+        SEARCH_URLS = {
+            "instagram": f'https://www.google.com/search?q=site:instagram.com+"{query}"',
+            "facebook": f'https://www.facebook.com/search/people/?q={query.replace(" ", "+")}',
+            "linkedin": f'https://www.linkedin.com/search/results/people/?keywords={query.replace(" ", "+")}',
+            "twitter": f'https://x.com/search?q={query.replace(" ", "+")}&f=user',
+            "x": f'https://x.com/search?q={query.replace(" ", "+")}&f=user'
+        }
+        
+        if platform not in SEARCH_URLS:
+            raise ValueError(f"Search not supported for platform: {platform}")
+        
+        return SEARCH_URLS[platform]

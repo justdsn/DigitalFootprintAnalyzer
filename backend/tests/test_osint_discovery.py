@@ -170,3 +170,47 @@ class TestUsernameVariations:
         
         # Should have no duplicates
         assert len(variations) == len(set(variations))
+
+
+# =============================================================================
+# SEARCH URL GENERATION TESTS
+# =============================================================================
+
+class TestSearchURLGenerator:
+    """Tests for search URL generation."""
+    
+    def test_generate_instagram_search_url(self):
+        """Test Instagram search URL generation."""
+        url = URLGenerator.generate_search_url("instagram", "cristiano")
+        assert "google.com/search" in url
+        assert "site:instagram.com" in url
+        assert "cristiano" in url
+    
+    def test_generate_facebook_search_url(self):
+        """Test Facebook search URL generation."""
+        url = URLGenerator.generate_search_url("facebook", "John Doe")
+        assert "facebook.com/search/people" in url
+        assert "John+Doe" in url or "John%20Doe" in url
+    
+    def test_generate_linkedin_search_url(self):
+        """Test LinkedIn search URL generation."""
+        url = URLGenerator.generate_search_url("linkedin", "Software Engineer")
+        assert "linkedin.com/search/results/people" in url
+        assert "Software" in url
+    
+    def test_generate_twitter_search_url(self):
+        """Test Twitter/X search URL generation."""
+        url = URLGenerator.generate_search_url("twitter", "johndoe")
+        assert "x.com/search" in url
+        assert "johndoe" in url
+    
+    def test_generate_x_search_url(self):
+        """Test X search URL generation."""
+        url = URLGenerator.generate_search_url("x", "username")
+        assert "x.com/search" in url
+        assert "username" in url
+    
+    def test_unsupported_platform_search_raises_error(self):
+        """Test that unsupported platform search raises error."""
+        with pytest.raises(ValueError, match="Search not supported"):
+            URLGenerator.generate_search_url("unsupported_platform", "query")
