@@ -2,10 +2,9 @@
 // ANALYZE PAGE - Modern Minimal Design
 // =============================================================================
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { lightScan } from '../services/api';
-import { detectExtension, startDeepScanViaExtension, onExtensionEvent, cancelScan } from '../utils/extensionBridge';
 import InteractiveLoading from '../components/InteractiveLoading';
 
 function AnalyzePage() {
@@ -13,8 +12,6 @@ function AnalyzePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [identifier, setIdentifier] = useState('');
-  const [extensionReady, setExtensionReady] = useState(false);
-  const [showExtensionSetup, setShowExtensionSetup] = useState(false);
   const [scanMode, setScanMode] = useState('light'); // 'light' or 'deep'
 
   // Platform selection for deep scan
@@ -51,79 +48,6 @@ function AnalyzePage() {
   const [currentPlatform, setCurrentPlatform] = useState(null);
   const [completedPlatforms, setCompletedPlatforms] = useState([]);
 
-
-
-  useEffect(() => {
-    // Check for extension on mount
-    checkExtension();
-
-    // Listen for extension events
-    const cleanup = onExtensionEvent((eventType, eventData) => {
-      console.log('Extension event:', eventType, eventData);
-
-      if (eventType === 'scanStarted') {
-        setIsDeepScanning(true);
-        setScanProgress(0);
-        setCurrentPlatform(null);
-        setCompletedPlatforms([]);
-      } else if (eventType === 'platformScanStarted') {
-        // Ensure platform is a string
-        const platform = eventData?.platform;
-        if (platform && typeof platform === 'string') {
-          setCurrentPlatform(platform);
-        }
-      } else if (eventType === 'platformScanCompleted') {
-        // Ensure platform is a string before adding to completedPlatforms
-        const platform = eventData?.platform;
-        if (platform && typeof platform === 'string') {
-          setCompletedPlatforms(prev => [...prev, platform]);
-        }
-      } else if (eventType === 'scanProgress') {
-        setScanProgress(eventData.progress || 0);
-        // Validate currentPlatform
-        if (eventData.currentPlatform && typeof eventData.currentPlatform === 'string') {
-          setCurrentPlatform(eventData.currentPlatform);
-        }
-        // Validate completedPlatforms is an array of strings
-        if (Array.isArray(eventData.completedPlatforms)) {
-          const validPlatforms = eventData.completedPlatforms.filter(
-            p => typeof p === 'string' && p.trim() !== ''
-          );
-          setCompletedPlatforms(validPlatforms);
-        }
-      } else if (eventType === 'scanCompleted') {
-        // Handle scan completion
-        setIsDeepScanning(false);
-        navigate('/results', { state: { results: eventData.results } });
-        setIsLoading(false);
-      } else if (eventType === 'scanCancelled') {
-        // Handle scan cancellation
-        setIsDeepScanning(false);
-        setIsLoading(false);
-        setError('Scan was cancelled');
-      } else if (eventType === 'scanError') {
-        // Handle scan error
-        setIsDeepScanning(false);
-        setIsLoading(false);
-        setError(eventData.error || 'Scan failed');
-      } else if (eventType === 'extensionReady') {
-        // Extension is ready
-        setExtensionReady(true);
-      }
-    });
-
-    return cleanup;
-  }, [navigate]);
-
-  const checkExtension = async () => {
-    const isInstalled = await detectExtension();
-    setExtensionReady(isInstalled);
-
-    if (!isInstalled) {
-      console.log('[Web App] Extension not detected');
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!identifier.trim()) {
@@ -146,23 +70,18 @@ function AnalyzePage() {
     }
   };
 
-  // Start deep scan directly
+  // Start deep scan directly (using backend OSINT, no extension needed)
   const handleDeepScan = async () => {
     if (!identifier.trim()) {
       setError('Please enter an identifier to scan');
       return;
     }
 
-    if (!extensionReady) {
-      setShowExtensionSetup(true);
-      return;
-    }
-
-    // Start the deep scan immediately
+    // Start the deep scan immediately - no extension check needed!
     startDeepScanNow();
   };
 
-  // Start the deep scan
+  // Start the deep scan using backend OSINT API (NO EXTENSION NEEDED!)
   const startDeepScanNow = async (platforms = scanPlatforms) => {
     setIsLoading(true);
     setIsDeepScanning(true);
@@ -172,30 +91,45 @@ function AnalyzePage() {
     setCompletedPlatforms([]);
 
     try {
-      // Start the scan via extension
-      await startDeepScanViaExtension({
-        identifierType: 'username',
-        identifierValue: identifier.trim(),
-        platforms: platforms
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      
+      // Call backend OSINT API directly (NO EXTENSION NEEDED)
+      const response = await fetch(`${API_BASE_URL}/api/deep-scan/direct`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier_type: 'name',  // Detect automatically or use 'username'/'email' based on input
+          identifier_value: identifier.trim(),  // FULL NAME preserved!
+          platforms: platforms
+        })
       });
 
-      // Results will come via onExtensionEvent listener
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+      }
 
+      const results = await response.json();
+      
+      setIsDeepScanning(false);
+      setIsLoading(false);
+      
+      // Navigate to results page with backend OSINT results
+      navigate('/results', { state: { results } });
+      
     } catch (err) {
-      setError(err.message);
+      console.error('Deep scan error:', err);
+      setError(err.message || 'Deep scan failed. Please try again.');
       setIsLoading(false);
       setIsDeepScanning(false);
     }
   };
 
   const handleCancelScan = async () => {
-    try {
-      await cancelScan();
-      setIsDeepScanning(false);
-      setIsLoading(false);
-    } catch (err) {
-      console.error('Failed to cancel scan:', err);
-    }
+    // For backend-based scan, we can just reset the state
+    setIsDeepScanning(false);
+    setIsLoading(false);
+    setError('Scan was cancelled');
   };
 
   // Show interactive loading during deep scan
@@ -348,7 +282,7 @@ function AnalyzePage() {
             <button
               type={scanMode === 'light' ? 'submit' : 'button'}
               onClick={scanMode === 'deep' ? handleDeepScan : undefined}
-              disabled={isLoading || !identifier.trim() || (scanMode === 'deep' && (!extensionReady || scanPlatforms.length === 0))}
+              disabled={isLoading || !identifier.trim() || (scanMode === 'deep' && scanPlatforms.length === 0)}
               className="w-full py-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg shadow-blue-600/25"
             >
               {isLoading ? (

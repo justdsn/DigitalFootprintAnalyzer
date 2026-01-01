@@ -86,6 +86,7 @@ from app.models.schemas import (
     ScanOptionsResponse,
     DeepScanResponse,
     # Deep Scan Analyze schemas (OSINT Integration)
+    DeepScanDirectRequest,
     DeepScanAnalyzeRequest,
     DeepScanAnalyzeResponse,
 )
@@ -115,6 +116,8 @@ from app.services.report import (
 )
 # Light Scan service (Google Dorking)
 from app.services.scan import LightScanService
+# OSINT Orchestrator for deep scan
+from app.osint.orchestrator import OSINTOrchestrator
 
 
 # =============================================================================
@@ -145,6 +148,8 @@ report_builder = ReportBuilder()
 pdf_generator = PDFGenerator()
 # Light Scan service instance
 light_scan_service = LightScanService()
+# OSINT Orchestrator instance
+osint_orchestrator = OSINTOrchestrator()
 
 # In-memory report storage with TTL (for demo purposes - use database in production)
 # Stores tuples of (timestamp, report_data) for TTL-based cleanup
@@ -2343,6 +2348,267 @@ async def deep_scan(request: LightScanRequest) -> DeepScanResponse:
             "detailed data extraction, profile verification, and impersonation detection."
         )
     )
+
+
+# =============================================================================
+# DEEP SCAN DIRECT ENDPOINT (Backend OSINT)
+# =============================================================================
+
+@router.post(
+    "/deep-scan/direct",
+    response_model=DeepScanAnalyzeResponse,
+    summary="Direct Deep Scan using Backend OSINT",
+    description="""
+    Performs deep scan using stored platform sessions and Playwright collectors.
+    
+    This endpoint bypasses the browser extension and uses the backend OSINT system directly.
+    
+    Flow:
+    1. Receive identifier and platforms
+    2. Use OSINTOrchestrator with stored sessions
+    3. Collect data via Playwright (Facebook, Instagram, LinkedIn, X)
+    4. Parse and analyze results
+    5. Return comprehensive analysis
+    
+    Benefits:
+    - No browser extension needed
+    - Uses stored authenticated sessions
+    - Handles full names properly (e.g., "dhanuka nanayakkara")
+    - Direct backend processing
+    """
+)
+async def deep_scan_direct(request: DeepScanDirectRequest) -> DeepScanAnalyzeResponse:
+    """
+    Direct deep scan using backend OSINT system.
+    
+    Args:
+        request: DeepScanDirectRequest containing identifier and platforms
+    
+    Returns:
+        DeepScanAnalyzeResponse: Comprehensive analysis results
+    
+    Raises:
+        HTTPException: 400 if identifier is invalid
+        HTTPException: 500 for internal errors
+    """
+    try:
+        import uuid
+        from datetime import datetime
+        
+        # Generate scan ID
+        scan_id = f"DS-{str(uuid.uuid4())[:8].upper()}"
+        
+        logger.info(f"Starting deep scan {scan_id} for '{request.identifier_value}' (type: {request.identifier_type})")
+        
+        # Use OSINT orchestrator to perform analysis
+        osint_results = await osint_orchestrator.analyze(
+            identifier=request.identifier_value,
+            platforms=request.platforms
+        )
+        
+        # Extract data from OSINT results
+        identifier_info = {
+            "type": request.identifier_type,
+            "value": request.identifier_value
+        }
+        
+        profiles_found = osint_results.get("profiles_found", [])
+        
+        # Build platform summary
+        platform_summary = {}
+        for platform in request.platforms:
+            platform_profiles = [p for p in profiles_found if p.get("platform") == platform]
+            platform_summary[platform] = {
+                "platform": platform.capitalize(),
+                "emoji": {"facebook": "📘", "instagram": "📷", "linkedin": "💼", "twitter": "𝕏"}.get(platform, "🔍"),
+                "status": "completed" if platform_profiles else "not_found",
+                "profiles_found": len(platform_profiles),
+                "errors": []
+            }
+        
+        # Extract all PII from profiles
+        all_pii = []
+        for profile in profiles_found:
+            platform = profile.get("platform", "unknown")
+            platform_name = platform.capitalize()
+            
+            # Extract PII from profile data
+            pii_data = profile.get("pii", {})
+            
+            # Process emails
+            for email in pii_data.get("emails", []):
+                all_pii.append({
+                    "type": "email",
+                    "value": email,
+                    "platform": platform,
+                    "platform_name": platform_name,
+                    "source": profile.get("url", ""),
+                    "risk_level": "high"
+                })
+            
+            # Process phones
+            for phone in pii_data.get("phones", []):
+                all_pii.append({
+                    "type": "phone",
+                    "value": phone,
+                    "platform": platform,
+                    "platform_name": platform_name,
+                    "source": profile.get("url", ""),
+                    "risk_level": "critical"
+                })
+            
+            # Process locations
+            if profile.get("location"):
+                all_pii.append({
+                    "type": "location",
+                    "value": profile["location"],
+                    "platform": platform,
+                    "platform_name": platform_name,
+                    "source": profile.get("url", ""),
+                    "risk_level": "medium"
+                })
+            
+            # Process bio
+            if profile.get("bio"):
+                bio_text = profile["bio"]
+                truncated_bio = bio_text[:BIO_MAX_LENGTH - 3] + "..." if len(bio_text) > BIO_MAX_LENGTH else bio_text
+                all_pii.append({
+                    "type": "bio",
+                    "value": truncated_bio,
+                    "platform": platform,
+                    "platform_name": platform_name,
+                    "source": profile.get("url", ""),
+                    "risk_level": "low"
+                })
+        
+        # Deduplicate PII
+        seen_pii = set()
+        unique_pii = []
+        pii_by_platform = {}
+        
+        for pii in all_pii:
+            key = (pii["type"], pii["value"])
+            if key not in seen_pii:
+                seen_pii.add(key)
+                unique_pii.append(pii)
+            
+            # Group by platform
+            platform = pii.get("platform")
+            if platform:
+                if platform not in pii_by_platform:
+                    pii_by_platform[platform] = {
+                        "platform_name": pii.get("platform_name", platform),
+                        "items": []
+                    }
+                if key not in [(p["type"], p["value"]) for p in pii_by_platform[platform]["items"]]:
+                    pii_by_platform[platform]["items"].append(pii)
+        
+        # Calculate risk score
+        risk_score = 10  # Base score
+        
+        risk_weights = {
+            "critical": 15,
+            "high": 10,
+            "medium": 5,
+            "low": 2
+        }
+        
+        for pii in unique_pii:
+            risk_level = pii.get("risk_level", "low")
+            risk_score += risk_weights.get(risk_level, 2)
+        
+        risk_score += min(len(profiles_found) * 3, 20)
+        
+        platforms_with_data = sum(
+            1 for p in platform_summary.values() 
+            if p.get("profiles_found", 0) > 0
+        )
+        risk_score += platforms_with_data * 5
+        
+        risk_score = min(risk_score, 100)
+        
+        # Determine risk level
+        if risk_score >= 70:
+            risk_level = "high"
+        elif risk_score >= 40:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+        
+        # Generate recommendations
+        recommendations = []
+        
+        if platforms_with_data > 0:
+            recommendations.append(
+                f"Review privacy settings on {platforms_with_data} platform(s) where profiles were found"
+            )
+        
+        critical_pii = [p for p in unique_pii if p.get("risk_level") == "critical"]
+        high_pii = [p for p in unique_pii if p.get("risk_level") == "high"]
+        
+        for item in critical_pii:
+            pii_type = item.get("type", "").replace("_", " ")
+            pii_value = item.get("value", "")
+            platform = item.get("platform_name", item.get("platform", "Unknown"))
+            
+            display_value = pii_value[:50] + "..." if len(str(pii_value)) > 50 else pii_value
+            
+            if item.get("type") in ["phones", "phone"]:
+                recommendations.insert(0,
+                    f"🚨 CRITICAL: Your phone number \"{display_value}\" is publicly visible on {platform}. Remove it immediately."
+                )
+        
+        for item in high_pii:
+            pii_type = item.get("type", "")
+            pii_value = item.get("value", "")
+            platform = item.get("platform_name", item.get("platform", "Unknown"))
+            
+            display_value = pii_value[:50] + "..." if len(str(pii_value)) > 50 else pii_value
+            
+            if item.get("type") in ["emails", "email"]:
+                recommendations.append(
+                    f"⚠️ HIGH RISK: Your email \"{display_value}\" is visible on {platform}. Check haveibeenpwned.com."
+                )
+        
+        if risk_score >= 70:
+            recommendations.append(
+                "🔴 Enable two-factor authentication (2FA) on all social media accounts immediately"
+            )
+        
+        if len(unique_pii) == 0:
+            recommendations.append(
+                "✅ No sensitive PII detected in public profiles - maintain good privacy practices"
+            )
+        
+        # Impersonation risks (simplified)
+        impersonation_risks = []
+        
+        # Build final response
+        return DeepScanAnalyzeResponse(
+            success=True,
+            scan_id=scan_id,
+            report_id=None,
+            analysis_timestamp=datetime.utcnow().isoformat() + "Z",
+            identifier=identifier_info,
+            platforms_analyzed=len(platform_summary),
+            total_profiles_found=len(profiles_found),
+            total_pii_exposed=len(unique_pii),
+            risk_score=risk_score,
+            risk_level=risk_level,
+            exposed_pii=unique_pii,
+            pii_by_platform=pii_by_platform,
+            platform_summary=platform_summary,
+            impersonation_risks=impersonation_risks,
+            recommendations=recommendations,
+            pdf_url=None
+        )
+        
+    except Exception as e:
+        logger.error(f"Error in deep scan direct: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"An error occurred during deep scan: {str(e)}"
+        )
 
 
 # =============================================================================

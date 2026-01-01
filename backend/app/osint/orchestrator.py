@@ -429,8 +429,9 @@ class OSINTOrchestrator:
         if identifier_type == "email":
             return identifier.split('@')[0]
         elif identifier_type == "name":
-            parts = identifier.lower().split()
-            return parts[0] if parts else identifier.lower().replace(' ', '')
+            # For names, use the full name for searching (keep spaces)
+            # Platforms will handle name-to-username matching
+            return identifier.strip()
         else:
             return identifier.lstrip('@').strip()
     
