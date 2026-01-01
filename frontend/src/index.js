@@ -24,6 +24,21 @@ import './index.css';
 import App from './App';
 
 // =============================================================================
+// GLOBAL ERROR HANDLERS
+// =============================================================================
+// Catch unhandled errors and promise rejections for debugging
+
+window.addEventListener('error', (event) => {
+  console.error('Global error:', event.error);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  console.error('Unhandled promise rejection:', event.reason);
+});
+
+console.log('Starting React app...');
+
+// =============================================================================
 // ROOT RENDER
 // =============================================================================
 // Using React 18's createRoot API for concurrent features
@@ -35,3 +50,5 @@ root.render(
     <App />
   </React.StrictMode>
 );
+
+console.log('React app rendered');

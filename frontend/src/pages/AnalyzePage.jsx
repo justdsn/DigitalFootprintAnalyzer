@@ -91,7 +91,7 @@ function AnalyzePage() {
     setCompletedPlatforms([]);
 
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
       
       // Call backend OSINT API directly (NO EXTENSION NEEDED)
       const response = await fetch(`${API_BASE_URL}/api/deep-scan/direct`, {
