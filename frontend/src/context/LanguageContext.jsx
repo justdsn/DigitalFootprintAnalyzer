@@ -92,35 +92,45 @@ export function LanguageProvider({ children }) {
    * @returns {string} Translated string or key if not found
    */
   const t = useCallback((key, params = {}) => {
-    // Get current language translations
-    const currentTranslations = translations[language] || translations.en;
-    
-    // Support nested keys using dot notation
-    const keys = key.split('.');
-    let value = currentTranslations;
-    
-    for (const k of keys) {
-      if (value && typeof value === 'object' && k in value) {
-        value = value[k];
-      } else {
-        // Key not found, return the key itself
-        console.warn(`Translation missing for key: ${key}`);
+    try {
+      // Get current language translations
+      const currentTranslations = translations[language] || translations.en;
+      
+      if (!currentTranslations) {
+        console.warn('No translations available');
         return key;
       }
-    }
-    
-    // If value is not a string, return the key
-    if (typeof value !== 'string') {
+      
+      // Support nested keys using dot notation
+      const keys = key.split('.');
+      let value = currentTranslations;
+      
+      for (const k of keys) {
+        if (value && typeof value === 'object' && k in value) {
+          value = value[k];
+        } else {
+          // Key not found, return the key itself
+          console.warn(`Translation missing for key: ${key}`);
+          return key;
+        }
+      }
+      
+      // If value is not a string, return the key
+      if (typeof value !== 'string') {
+        return key;
+      }
+      
+      // Handle parameter interpolation (e.g., "Hello, {name}!")
+      let result = value;
+      Object.entries(params).forEach(([paramKey, paramValue]) => {
+        result = result.replace(new RegExp(`{${paramKey}}`, 'g'), paramValue);
+      });
+      
+      return result;
+    } catch (error) {
+      console.error('Translation error:', error);
       return key;
     }
-    
-    // Handle parameter interpolation (e.g., "Hello, {name}!")
-    let result = value;
-    Object.entries(params).forEach(([paramKey, paramValue]) => {
-      result = result.replace(new RegExp(`{${paramKey}}`, 'g'), paramValue);
-    });
-    
-    return result;
   }, [language]);
 
   // ---------------------------------------------------------------------------

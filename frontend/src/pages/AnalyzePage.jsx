@@ -91,7 +91,7 @@ function AnalyzePage() {
     setCompletedPlatforms([]);
 
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000';
       
       // Call backend OSINT API directly (NO EXTENSION NEEDED)
       const response = await fetch(`${API_BASE_URL}/api/deep-scan/direct`, {
@@ -350,59 +350,6 @@ function AnalyzePage() {
             ))}
           </div>
         </div>
-
-        {/* Extension Setup Modal */}
-        {showExtensionSetup && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6 sm:p-8">
-                <div className="flex justify-between items-start mb-6">
-                  <h2 className="text-2xl font-bold text-slate-900">🔌 Install Extension</h2>
-                  <button
-                    onClick={() => setShowExtensionSetup(false)}
-                    className="text-slate-400 hover:text-slate-600 transition-colors"
-                  >
-                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                  </button>
-                </div>
-
-                <p className="text-slate-600 mb-6">
-                  To use Deep Scan, you need the Chrome extension installed.
-                </p>
-
-                <div className="space-y-6">
-                  <div className="bg-slate-50 rounded-xl p-6">
-                    <h3 className="font-semibold text-slate-900 mb-3">Installation Steps</h3>
-                    <ol className="list-decimal list-inside space-y-2 text-sm text-slate-600">
-                      <li>Open Chrome and go to <code className="bg-white px-2 py-1 rounded text-xs">chrome://extensions</code></li>
-                      <li>Enable "Developer mode" (toggle in top right)</li>
-                      <li>Click "Load unpacked"</li>
-                      <li>Select the <code className="bg-white px-2 py-1 rounded text-xs">extension/</code> folder from this project</li>
-                      <li>Refresh this page</li>
-                    </ol>
-                  </div>
-
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => window.location.reload()}
-                      className="flex-1 py-3 px-4 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200"
-                    >
-                      I've Installed the Extension
-                    </button>
-                    <button
-                      onClick={() => setShowExtensionSetup(false)}
-                      className="px-6 py-3 bg-slate-100 text-slate-700 font-semibold rounded-xl hover:bg-slate-200 transition-all duration-200"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
