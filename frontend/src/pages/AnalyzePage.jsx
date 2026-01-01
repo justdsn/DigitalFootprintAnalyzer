@@ -369,10 +369,7 @@ function AnalyzePage() {
               )}
             </button>
 
-            {/* Extension Warning */}
-            {scanMode === 'deep' && !extensionReady && (
-              {/* Extension warning removed as per request */}
-            )}
+            {/* Extension Warning removed as per request */}
           </form>
 
           {/* Privacy Notice */}
