@@ -247,7 +247,7 @@ class OSINTOrchestrator:
             Collection result
         
         Raises:
-            RuntimeError: If browser initialization fails
+            RuntimeError: If browser initialization fails (propagated to caller)
         """
         collector = collector_class(self.session_manager)
         
@@ -264,9 +264,9 @@ class OSINTOrchestrator:
             return result
             
         except RuntimeError as e:
-            # Browser initialization failed - this is critical
+            # Browser initialization failed - propagate to caller for fail-fast handling
             logger.error(f"❌ [{platform}] CRITICAL: {e}")
-            raise  # Re-raise to stop the scan
+            raise
             
         except Exception as e:
             logger.error(f"❌ [{platform}] Collection error: {e}")

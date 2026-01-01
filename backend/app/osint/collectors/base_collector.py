@@ -116,10 +116,6 @@ class BaseCollector(ABC):
             
             playwright = await async_playwright().start()
             
-            # Check if playwright is properly initialized
-            if not playwright:
-                raise RuntimeError("Failed to start Playwright - playwright object is None")
-            
             # Launch browser with stealthy args
             launch_args = {
                 "headless": settings.OSINT_BROWSER_HEADLESS,
@@ -135,9 +131,6 @@ class BaseCollector(ABC):
 
             logger.info(f"[{platform}] Launching Chromium browser...")
             self.browser = await playwright.chromium.launch(**launch_args)
-            
-            if not self.browser:
-                raise RuntimeError("Browser launch succeeded but browser object is None")
 
             # Context options for stealth
             context_args = {
@@ -173,7 +166,7 @@ class BaseCollector(ABC):
                     await self.context.close()
                 if self.browser:
                     await self.browser.close()
-            except:
+            except Exception:
                 pass
             
             # Re-raise with more context
