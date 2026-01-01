@@ -34,7 +34,7 @@ class URLGenerator:
         
         Args:
             platform: Platform name (lowercase)
-            username: Username or identifier
+            username: Username or identifier (can be full name with spaces)
         
         Returns:
             Profile URL
@@ -46,6 +46,13 @@ class URLGenerator:
         
         if platform not in URLGenerator.PLATFORMS:
             raise ValueError(f"Unsupported platform: {platform}")
+        
+        # Special handling for Facebook when username contains spaces (full name)
+        if platform == "facebook" and ' ' in username:
+            # For Facebook, use search URL with full name
+            # https://www.facebook.com/search/people/?q=dhanuka+nanayakkara
+            encoded_name = username.replace(' ', '+')
+            return f"https://www.facebook.com/search/people/?q={encoded_name}"
         
         return URLGenerator.PLATFORMS[platform].format(username=username)
     

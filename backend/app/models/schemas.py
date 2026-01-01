@@ -2097,6 +2097,63 @@ class DeepScanResponse(BaseModel):
 
 
 # =============================================================================
+# DEEP SCAN DIRECT REQUEST MODEL (Backend OSINT)
+# =============================================================================
+
+class DeepScanDirectRequest(BaseModel):
+    """
+    Request model for direct deep scan using backend OSINT system.
+    
+    Bypasses browser extension and uses stored platform sessions directly
+    with Playwright collectors for authenticated searches.
+    
+    Attributes:
+        identifier_type: Type of identifier (name, email, username)
+        identifier_value: The value to search for (FULL NAME preserved!)
+        platforms: List of platforms to scan
+    
+    Example:
+        {
+            "identifier_type": "name",
+            "identifier_value": "dhanuka nanayakkara",
+            "platforms": ["facebook", "instagram"]
+        }
+    """
+    identifier_type: str = Field(
+        ...,
+        description="Type of identifier: name, email, or username"
+    )
+    identifier_value: str = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        description="The identifier value to search for (full name preserved)",
+        examples=["dhanuka nanayakkara", "john@example.com", "john_doe"]
+    )
+    platforms: List[str] = Field(
+        default_factory=lambda: ["facebook", "instagram", "linkedin", "twitter"],
+        description="List of platforms to scan"
+    )
+    
+    @field_validator("identifier_type")
+    @classmethod
+    def validate_identifier_type(cls, v: str) -> str:
+        """Validate identifier type."""
+        valid_types = ["name", "email", "username"]
+        if v.lower() not in valid_types:
+            raise ValueError(f"identifier_type must be one of: {valid_types}")
+        return v.lower()
+    
+    @field_validator("identifier_value")
+    @classmethod
+    def validate_identifier_value(cls, v: str) -> str:
+        """Validate and clean the identifier value."""
+        if not v or not v.strip():
+            raise ValueError("Identifier value cannot be empty")
+        return v.strip()
+
+
+# =============================================================================
 # DEEP SCAN ANALYZE MODELS (OSINT Integration)
 # =============================================================================
 
