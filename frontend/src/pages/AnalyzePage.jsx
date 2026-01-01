@@ -67,16 +67,29 @@ function AnalyzePage() {
         setCurrentPlatform(null);
         setCompletedPlatforms([]);
       } else if (eventType === 'platformScanStarted') {
-        setCurrentPlatform(eventData.platform);
+        // Ensure platform is a string
+        const platform = eventData?.platform;
+        if (platform && typeof platform === 'string') {
+          setCurrentPlatform(platform);
+        }
       } else if (eventType === 'platformScanCompleted') {
-        setCompletedPlatforms(prev => [...prev, eventData.platform]);
+        // Ensure platform is a string before adding to completedPlatforms
+        const platform = eventData?.platform;
+        if (platform && typeof platform === 'string') {
+          setCompletedPlatforms(prev => [...prev, platform]);
+        }
       } else if (eventType === 'scanProgress') {
         setScanProgress(eventData.progress || 0);
-        if (eventData.currentPlatform) {
+        // Validate currentPlatform
+        if (eventData.currentPlatform && typeof eventData.currentPlatform === 'string') {
           setCurrentPlatform(eventData.currentPlatform);
         }
-        if (eventData.completedPlatforms) {
-          setCompletedPlatforms(eventData.completedPlatforms);
+        // Validate completedPlatforms is an array of strings
+        if (Array.isArray(eventData.completedPlatforms)) {
+          const validPlatforms = eventData.completedPlatforms.filter(
+            p => typeof p === 'string' && p.trim() !== ''
+          );
+          setCompletedPlatforms(validPlatforms);
         }
       } else if (eventType === 'scanCompleted') {
         // Handle scan completion

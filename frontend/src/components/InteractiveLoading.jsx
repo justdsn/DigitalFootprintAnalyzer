@@ -6,6 +6,7 @@
 // =============================================================================
 
 import React, { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 
 const ESTIMATED_SECONDS_PER_PLATFORM = 30; // Rough estimate for time calculation
 
@@ -34,6 +35,20 @@ function InteractiveLoading({
   progress = 0,
   onCancel 
 }) {
+  // Defensive checks: Ensure platforms and completedPlatforms are arrays of strings
+  const safePlatforms = Array.isArray(platforms) 
+    ? platforms.filter(p => typeof p === 'string' && p.trim() !== '')
+    : ['facebook', 'instagram', 'linkedin', 'x'];
+  
+  const safeCompletedPlatforms = Array.isArray(completedPlatforms)
+    ? completedPlatforms.filter(p => typeof p === 'string' && p.trim() !== '')
+    : [];
+  
+  // Ensure currentPlatform is a string or null
+  const safeCurrentPlatform = currentPlatform && typeof currentPlatform === 'string' 
+    ? currentPlatform 
+    : null;
+
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
   const [elapsedTime, setElapsedTime] = useState(0);
   const [startTime] = useState(Date.now());
@@ -55,7 +70,7 @@ function InteractiveLoading({
   }, [startTime]);
 
   // Calculate estimated time remaining
-  const estimatedTotal = platforms.length * ESTIMATED_SECONDS_PER_PLATFORM;
+  const estimatedTotal = safePlatforms.length * ESTIMATED_SECONDS_PER_PLATFORM;
   const estimatedRemaining = Math.max(0, estimatedTotal - elapsedTime);
 
   // Format time as mm:ss
@@ -67,9 +82,9 @@ function InteractiveLoading({
 
   // Get platform status
   const getPlatformStatus = (platform) => {
-    if (completedPlatforms.includes(platform)) {
+    if (safeCompletedPlatforms.includes(platform)) {
       return 'completed';
-    } else if (currentPlatform === platform) {
+    } else if (safeCurrentPlatform === platform) {
       return 'scanning';
     }
     return 'pending';
@@ -130,8 +145,8 @@ function InteractiveLoading({
 
         {/* Platform Status Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          {platforms.map((platform) => {
-            const info = PLATFORM_INFO[platform] || { name: platform, emoji: '🔍', color: 'gray' };
+          {safePlatforms.map((platform) => {
+            const info = PLATFORM_INFO[platform] || { name: String(platform), emoji: '🔍', color: 'gray' };
             const status = getPlatformStatus(platform);
             
             return (
@@ -218,5 +233,13 @@ function InteractiveLoading({
     </div>
   );
 }
+
+InteractiveLoading.propTypes = {
+  platforms: PropTypes.arrayOf(PropTypes.string),
+  currentPlatform: PropTypes.string,
+  completedPlatforms: PropTypes.arrayOf(PropTypes.string),
+  progress: PropTypes.number,
+  onCancel: PropTypes.func
+};
 
 export default InteractiveLoading;
