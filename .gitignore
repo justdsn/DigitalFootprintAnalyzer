@@ -179,3 +179,4 @@ extension/*.pem
 # Session files contain authentication cookies
 backend/app/osint/sessions/*.json
 !backend/app/osint/sessions/.gitkeep
+backend/validate_improvements.py

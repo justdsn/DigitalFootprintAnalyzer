@@ -81,6 +81,8 @@ async def osint_analyze(request: OSINTAnalyzeRequest) -> OSINTAnalyzeResponse:
                 detail="Identifier is required and cannot be empty"
             )
         
+        logger.info(f"🔍 Starting OSINT analysis for: {request.identifier}")
+        
         # Perform analysis
         result = await orchestrator.analyze(
             identifier=request.identifier.strip(),
@@ -88,13 +90,34 @@ async def osint_analyze(request: OSINTAnalyzeRequest) -> OSINTAnalyzeResponse:
             use_search=request.use_search
         )
         
+        logger.info(f"✅ OSINT analysis completed successfully")
+        
         # Convert to response model
         return OSINTAnalyzeResponse(**result)
         
+    except RuntimeError as e:
+        # Critical errors (browser init failures)
+        logger.error(f"❌ CRITICAL ERROR in OSINT analysis: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "Browser initialization failed",
+                "message": str(e),
+                "solution": (
+                    "Playwright browser automation failed. "
+                    "This may be due to: "
+                    "1. Missing browser installation - Run: playwright install chromium "
+                    "2. Python 3.13 compatibility issues - Use Python 3.11.x or 3.12.x "
+                    "3. System dependencies missing - Check Playwright documentation"
+                )
+            }
+        )
+        
     except HTTPException:
         raise
+        
     except Exception as e:
-        logger.error(f"Error in OSINT analysis: {e}", exc_info=True)
+        logger.error(f"❌ Error in OSINT analysis: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An error occurred during OSINT analysis: {str(e)}"
