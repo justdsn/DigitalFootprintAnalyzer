@@ -103,10 +103,15 @@ class InstagramParser(ProfileParser):
             # PRIORITY 1: Extract from JSON-LD (most reliable)
             json_ld_data = self._extract_json_ld(soup)
             if json_ld_data:
-                profile["name"] = json_ld_data.get("name") or profile["name"]
-                profile["username"] = json_ld_data.get("identifier") or profile["username"]
-                profile["bio"] = json_ld_data.get("description") or profile["bio"]
-                profile["followers"] = json_ld_data.get("followers") or profile["followers"]
+                # Use explicit None checking to handle empty strings properly
+                if json_ld_data.get("name"):
+                    profile["name"] = json_ld_data["name"]
+                if json_ld_data.get("identifier"):
+                    profile["username"] = json_ld_data["identifier"]
+                if json_ld_data.get("description"):
+                    profile["bio"] = json_ld_data["description"]
+                if json_ld_data.get("followers"):
+                    profile["followers"] = json_ld_data["followers"]
                 logger.info(f"✅ Extracted from JSON-LD: {profile['username']}")
             
             # PRIORITY 2: Extract from Open Graph (fallback)

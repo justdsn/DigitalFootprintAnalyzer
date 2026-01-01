@@ -184,16 +184,19 @@ class ProfileParser(ABC):
             return []
         
         # URL pattern - matches http://, https://, and bare domains
-        url_pattern = r'https?://[^\s]+|www\.[^\s]+|[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(?:/[^\s]*)?'
+        # More specific pattern to avoid false positives
+        url_pattern = r'https?://(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s]*)?|www\.(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s]*)?|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s]*)?'
         urls = re.findall(url_pattern, text)
         
         # Clean up URLs (remove trailing punctuation)
         cleaned_urls = []
         for url in urls:
             url = url.rstrip('.,;:!?)')
-            if not url.startswith('http'):
-                url = 'https://' + url
-            cleaned_urls.append(url)
+            # Only add if it looks like a valid domain (has at least one dot and proper TLD)
+            if '.' in url and not url.endswith('.'):
+                if not url.startswith('http'):
+                    url = 'https://' + url
+                cleaned_urls.append(url)
         
         return list(set(cleaned_urls))  # Deduplicate
     
