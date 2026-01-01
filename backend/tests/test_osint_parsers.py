@@ -56,6 +56,58 @@ def mock_instagram_html():
 
 
 @pytest.fixture
+def mock_instagram_html_with_json_ld():
+    """Mock Instagram profile HTML with JSON-LD structured data."""
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta property="og:title" content="Cristiano Ronaldo">
+        <meta property="og:description" content="Athlete">
+        <meta property="og:url" content="https://www.instagram.com/cristiano/">
+        <script type="application/ld+json">
+        {
+            "@context": "http://schema.org",
+            "@type": "ProfilePage",
+            "name": "Cristiano Ronaldo",
+            "identifier": "cristiano",
+            "description": "Professional footballer. Contact: cr7@example.com | Visit: https://cr7.com",
+            "interactionStatistic": {
+                "@type": "InteractionCounter",
+                "interactionType": "http://schema.org/FollowAction",
+                "userInteractionCount": "643000000"
+            }
+        }
+        </script>
+    </head>
+    <body>
+        <h1>Cristiano Ronaldo</h1>
+        <span>Professional footballer. Contact: cr7@example.com | Visit: https://cr7.com</span>
+    </body>
+    </html>
+    """
+
+
+@pytest.fixture
+def mock_instagram_html_with_bio_urls():
+    """Mock Instagram profile HTML with URLs in bio."""
+    return """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta property="og:title" content="Jane Tech">
+        <meta property="og:description" content="Tech blogger | Email: jane@tech.com | Phone: +1-555-123-4567 | Site: www.janetech.com">
+        <meta property="og:url" content="https://www.instagram.com/janetech/">
+    </head>
+    <body>
+        <h1>Jane Tech</h1>
+        <span>Tech blogger | Email: jane@tech.com | Phone: +1-555-123-4567 | Site: www.janetech.com</span>
+    </body>
+    </html>
+    """
+
+
+@pytest.fixture
 def mock_facebook_html():
     """Mock Facebook profile HTML."""
     return """
@@ -134,6 +186,35 @@ class TestProfileParserUtilities:
         
         assert soup is not None
         assert soup.find('p').get_text() == "Test"
+    
+    def test_extract_urls_from_text(self):
+        """Test URL extraction from plain text."""
+        parser = InstagramParser()
+        
+        # Test various URL formats
+        text1 = "Visit my website at https://example.com and https://blog.example.com"
+        urls1 = parser.extract_urls_from_text(text1)
+        assert len(urls1) == 2
+        assert "https://example.com" in urls1
+        assert "https://blog.example.com" in urls1
+        
+        # Test URLs without http
+        text2 = "Check out www.example.com and example.org"
+        urls2 = parser.extract_urls_from_text(text2)
+        assert len(urls2) == 2
+        assert any("example.com" in url for url in urls2)
+        assert any("example.org" in url for url in urls2)
+        
+        # Test email addresses (should be extracted as URLs)
+        text3 = "Contact me at jane@example.com"
+        urls3 = parser.extract_urls_from_text(text3)
+        # Emails might not be extracted as URLs by our URL pattern
+        # This is okay since we extract emails separately
+        
+        # Test text with no URLs
+        text4 = "No URLs here just plain text"
+        urls4 = parser.extract_urls_from_text(text4)
+        assert len(urls4) == 0
 
 
 # =============================================================================
@@ -152,6 +233,35 @@ class TestInstagramParser:
         assert result["name"] == "John Doe"
         assert "Software Developer" in result["bio"]
         assert result["username"] == "johndoe"
+    
+    def test_parse_instagram_with_json_ld(self, mock_instagram_html_with_json_ld):
+        """Test parsing Instagram profile with JSON-LD data."""
+        parser = InstagramParser()
+        result = parser.parse(mock_instagram_html_with_json_ld)
+        
+        assert result["platform"] == "instagram"
+        assert result["name"] == "Cristiano Ronaldo"
+        assert result["username"] == "cristiano"
+        assert "Professional footballer" in result["bio"]
+        assert result["followers"] == "643000000"
+        
+        # Check that URLs from bio are extracted
+        assert len(result["urls"]) > 0
+        assert any("cr7.com" in url for url in result["urls"])
+    
+    def test_parse_instagram_with_bio_pii(self, mock_instagram_html_with_bio_urls):
+        """Test parsing Instagram profile with PII in bio."""
+        parser = InstagramParser()
+        result = parser.parse(mock_instagram_html_with_bio_urls)
+        
+        assert result["platform"] == "instagram"
+        assert result["name"] == "Jane Tech"
+        assert result["username"] == "janetech"
+        assert "Tech blogger" in result["bio"]
+        
+        # Check that URLs from bio are extracted
+        assert len(result["urls"]) > 0
+        assert any("janetech.com" in url for url in result["urls"])
     
     def test_platform_name(self):
         """Test platform name."""

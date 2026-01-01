@@ -22,6 +22,7 @@ Example Usage:
     await collector.close_browser()
 """
 
+import asyncio
 import logging
 from typing import Dict, Any
 
@@ -62,7 +63,8 @@ class InstagramCollector(BaseCollector):
             "url": url,
             "html": None,
             "text_blocks": {},
-            "error": None
+            "error": None,
+            "requires_login": False
         }
         
         try:
@@ -72,14 +74,17 @@ class InstagramCollector(BaseCollector):
                 result["error"] = "Navigation failed"
                 return result
 
-            # Check for login wall
+            # Wait for page to fully load
+            await asyncio.sleep(3)
+
+            # Check for login wall (but don't fail immediately)
             has_login_wall = await self.check_login_wall()
             if has_login_wall:
-                logger.warning(f"Login wall detected for {url}")
-                result["error"] = "Login wall detected - session may be expired"
-                return result
+                logger.warning(f"Login wall detected for {url} - attempting to extract anyway")
+                result["requires_login"] = True
+                # DON'T return here - try to extract what we can!
 
-            # Extract HTML
+            # Extract HTML (even if login wall present)
             html = await self.get_page_html()
             if not html:
                 result["error"] = "Failed to extract HTML"
@@ -92,10 +97,10 @@ class InstagramCollector(BaseCollector):
             result["text_blocks"] = text_blocks
 
             result["success"] = True
-            logger.info(f"Successfully collected data from {url}")
+            logger.info(f"✅ Successfully collected data from {url}")
 
         except Exception as e:
-            logger.error(f"Error collecting from Instagram {url}: {e}")
+            logger.error(f"❌ Error collecting from Instagram {url}: {e}")
             result["error"] = str(e)
 
         return result

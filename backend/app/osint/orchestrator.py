@@ -20,6 +20,7 @@ Main controller that orchestrates the entire OSINT workflow:
 
 import asyncio
 import logging
+import re
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
@@ -269,6 +270,39 @@ class OSINTOrchestrator:
                 # Extract PII from bio and text
                 bio_text = profile.get("bio") or ""
                 pii_data = self.pii_extractor.extract_all(bio_text)
+                
+                # Also check for URLs in bio
+                if profile.get("urls"):
+                    if "urls" not in pii_data:
+                        pii_data["urls"] = []
+                    pii_data["urls"].extend(profile.get("urls", []))
+                    # Deduplicate
+                    pii_data["urls"] = list(set(pii_data["urls"]))
+                
+                # Extract email/phone from bio if present (additional patterns)
+                if bio_text:
+                    # Email pattern - comprehensive (fixed character class)
+                    emails = re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b', bio_text)
+                    if emails:
+                        if "emails" not in pii_data:
+                            pii_data["emails"] = []
+                        pii_data["emails"].extend(emails)
+                        pii_data["emails"] = list(set(pii_data["emails"]))
+                    
+                    # Phone pattern (international) - more specific to avoid false positives
+                    # Matches: +1-555-123-4567, (555) 123-4567, +44 20 1234 5678
+                    # Requires phone-like formatting (parentheses, hyphens, or plus signs)
+                    phone_pattern = r'(?:\+\d{1,3}[\s\-\.]?)?\(?\d{2,4}\)?[\s\-\.]?\d{3,4}[\s\-\.]?\d{3,4}'
+                    potential_phones = re.findall(phone_pattern, bio_text)
+                    if potential_phones:
+                        if "phones" not in pii_data:
+                            pii_data["phones"] = []
+                        # Clean and validate phone numbers (must have at least 10 digits)
+                        for phone in potential_phones:
+                            digits = re.sub(r'[^\d]', '', phone)
+                            if len(digits) >= 10:
+                                pii_data["phones"].append(phone.strip())
+                        pii_data["phones"] = list(set(pii_data["phones"]))
                 
                 # Run NER on bio and name
                 combined_text = f"{profile.get('name', '')} {bio_text}"

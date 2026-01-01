@@ -170,6 +170,36 @@ class ProfileParser(ABC):
         
         return list(set(urls))  # Deduplicate
     
+    def extract_urls_from_text(self, text: str) -> List[str]:
+        """
+        Extract URLs from plain text (e.g., from bio).
+        
+        Args:
+            text: Text containing URLs
+        
+        Returns:
+            List of extracted URLs
+        """
+        if not text:
+            return []
+        
+        # URL pattern - matches http://, https://, and bare domains
+        # More specific pattern to avoid false positives
+        url_pattern = r'https?://(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s]*)?|www\.(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s]*)?|(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:/[^\s]*)?'
+        urls = re.findall(url_pattern, text)
+        
+        # Clean up URLs (remove trailing punctuation)
+        cleaned_urls = []
+        for url in urls:
+            url = url.rstrip('.,;:!?)')
+            # Only add if it looks like a valid domain (has at least one dot and proper TLD)
+            if '.' in url and not url.endswith('.'):
+                if not url.startswith('http'):
+                    url = 'https://' + url
+                cleaned_urls.append(url)
+        
+        return list(set(cleaned_urls))  # Deduplicate
+    
     @abstractmethod
     def parse(self, html: str) -> Dict[str, Any]:
         """
