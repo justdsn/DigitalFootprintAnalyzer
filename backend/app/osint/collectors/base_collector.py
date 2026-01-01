@@ -102,14 +102,23 @@ class BaseCollector(ABC):
     async def initialize_browser(self) -> None:
         """
         Initialize Playwright browser with session if available.
+        
+        Raises:
+            RuntimeError: If browser fails to initialize
         """
         platform = self.get_platform_name()
         
         try:
+            logger.info(f"[{platform}] Initializing Playwright browser...")
+            
             # Load session if exists
             storage_state = self.session_manager.load_session(platform)
             
             playwright = await async_playwright().start()
+            
+            # Check if playwright is properly initialized
+            if not playwright:
+                raise RuntimeError("Failed to start Playwright - playwright object is None")
             
             # Launch browser with stealthy args
             launch_args = {
@@ -124,7 +133,11 @@ class BaseCollector(ABC):
             if self.proxy:
                 launch_args["proxy"] = {"server": self.proxy}
 
+            logger.info(f"[{platform}] Launching Chromium browser...")
             self.browser = await playwright.chromium.launch(**launch_args)
+            
+            if not self.browser:
+                raise RuntimeError("Browser launch succeeded but browser object is None")
 
             # Context options for stealth
             context_args = {
@@ -133,23 +146,43 @@ class BaseCollector(ABC):
                 "java_script_enabled": True,
             }
             if storage_state:
-                logger.info(f"Loading session for {platform}")
+                logger.info(f"[{platform}] Loading session for authenticated access")
                 context_args["storage_state"] = storage_state
             else:
-                logger.warning(f"No session available for {platform}, using anonymous mode")
+                logger.warning(f"[{platform}] No session available, using anonymous mode")
 
             self.context = await self.browser.new_context(**context_args)
             self.context.set_default_timeout(settings.OSINT_BROWSER_TIMEOUT)
             self.page = await self.context.new_page()
 
-            # Manual stealth patches (navigator, plugins, webdriver, etc.)
+            # Apply stealth patches
             await self._apply_stealth(self.page)
 
-            logger.info(f"Browser initialized for {platform} with stealth and user-agent: {self.user_agent}")
+            logger.info(f"✅ [{platform}] Browser initialized successfully")
 
         except Exception as e:
-            logger.error(f"Error initializing browser for {platform}: {e}")
-            raise
+            logger.error(f"❌ [{platform}] Browser initialization failed: {e}")
+            logger.error(f"Error type: {type(e).__name__}")
+            logger.error(f"Error details: {str(e)}")
+            
+            # Clean up partial initialization
+            try:
+                if self.page:
+                    await self.page.close()
+                if self.context:
+                    await self.context.close()
+                if self.browser:
+                    await self.browser.close()
+            except:
+                pass
+            
+            # Re-raise with more context
+            raise RuntimeError(
+                f"Failed to initialize Playwright browser for {platform}. "
+                f"Error: {type(e).__name__}: {str(e)}. "
+                "This may be due to Python 3.13 compatibility issues or missing browser installation. "
+                "Try: playwright install chromium"
+            ) from e
 
     async def _apply_stealth(self, page: Page):
         """

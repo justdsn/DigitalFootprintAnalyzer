@@ -48,6 +48,7 @@ async def lifespan(app: FastAPI):
     Manage application lifecycle events.
     
     Startup:
+    - Check Playwright installation
     - Preload the spaCy NLP model to avoid cold start delays
     
     Shutdown:
@@ -56,8 +57,35 @@ async def lifespan(app: FastAPI):
     Args:
         app: FastAPI application instance
     """
-    # Startup: Preload NLP model for faster first requests
+    # Startup: Check Playwright installation
     logger.info("🚀 Starting Digital Footprint Analyzer...")
+    
+    # Import Playwright checker
+    from app.osint.playwright_checker import check_playwright_installation, install_playwright_browsers
+    
+    logger.info("🔍 Checking Playwright installation...")
+    playwright_status = await check_playwright_installation()
+    
+    if playwright_status["warnings"]:
+        for warning in playwright_status["warnings"]:
+            logger.warning(warning)
+    
+    if not playwright_status["installed"]:
+        logger.error("❌ Playwright is not installed!")
+        logger.error("Install with: pip install playwright")
+        for error in playwright_status["errors"]:
+            logger.error(error)
+    elif not playwright_status["browsers_installed"]:
+        logger.warning("⚠️  Playwright browsers not found. Attempting to install...")
+        if install_playwright_browsers():
+            logger.info("✅ Browsers installed successfully")
+        else:
+            logger.error("❌ Failed to install browsers. Deep scan will not work!")
+            logger.error("Manual installation: playwright install chromium")
+    else:
+        logger.info("✅ Playwright is ready for OSINT data collection")
+    
+    # Preload NLP model for faster first requests
     preload_nlp_model()
     logger.info("✅ NLP model loaded successfully")
     

@@ -3,6 +3,9 @@
 # =============================================================================
 # Python dependencies for the FastAPI backend application.
 # Install with: pip install -r requirements.txt
+#
+# CRITICAL: Python 3.13 has breaking changes for Playwright
+# Use Python 3.11.x or 3.12.x for stability
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -52,7 +55,9 @@ reportlab>=4.0.0          # PDF report generation
 # -----------------------------------------------------------------------------
 # Browser Automation (OSINT Data Collection)
 # -----------------------------------------------------------------------------
-playwright>=1.40.0        # Headless browser automation for OSINT
+# Updated to latest stable version compatible with Python 3.12
+# After installing requirements, run: playwright install chromium
+playwright>=1.42.0        # Headless browser automation for OSINT
 playwright-stealth>=1.0.0 # Stealth plugin to avoid detection
 
 # -----------------------------------------------------------------------------

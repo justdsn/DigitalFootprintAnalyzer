@@ -162,6 +162,9 @@ class OSINTOrchestrator:
         
         Returns:
             Dict mapping platform to collection results
+        
+        Raises:
+            RuntimeError: If ALL platforms fail to collect data
         """
         tasks = []
         platform_names = []
@@ -177,15 +180,52 @@ class OSINTOrchestrator:
         
         # Map results to platforms
         collection_results = {}
+        successful_collections = 0
+        browser_init_failures = 0
+        
         for platform, result in zip(platform_names, results):
-            if isinstance(result, Exception):
-                logger.error(f"Error collecting from {platform}: {result}")
+            if isinstance(result, RuntimeError):
+                # Browser initialization failed
+                logger.error(f"❌ [{platform}] Browser initialization failed: {result}")
                 collection_results[platform] = {
                     "success": False,
-                    "error": str(result)
+                    "error": str(result),
+                    "error_type": "browser_init_failure"
                 }
+                browser_init_failures += 1
+                
+            elif isinstance(result, Exception):
+                logger.error(f"❌ [{platform}] Collection error: {result}")
+                collection_results[platform] = {
+                    "success": False,
+                    "error": str(result),
+                    "error_type": type(result).__name__
+                }
+                
             else:
                 collection_results[platform] = result
+                if result.get("success"):
+                    successful_collections += 1
+        
+        # If ALL platforms failed due to browser issues, raise error
+        if browser_init_failures == len(platform_names):
+            raise RuntimeError(
+                "All platform data collection failed due to browser initialization errors. "
+                "This is likely due to Playwright not being properly installed or Python 3.13 compatibility issues. "
+                "Solutions: "
+                "1. Run 'playwright install chromium' "
+                "2. Use Python 3.11.x or 3.12.x instead of Python 3.13 "
+                "3. Check logs for detailed error messages"
+            )
+        
+        # If no platforms succeeded, log warning
+        if successful_collections == 0:
+            logger.warning(
+                f"⚠️  No platforms collected data successfully. "
+                f"Failures: {len(platform_names)}, Browser init failures: {browser_init_failures}"
+            )
+        else:
+            logger.info(f"✅ Successfully collected data from {successful_collections}/{len(platform_names)} platforms")
         
         return collection_results
     
@@ -205,13 +245,39 @@ class OSINTOrchestrator:
         
         Returns:
             Collection result
+        
+        Raises:
+            RuntimeError: If browser initialization fails
         """
         collector = collector_class(self.session_manager)
         
         try:
+            logger.info(f"[{platform}] Starting data collection from {url}")
             await collector.initialize_browser()
             result = await collector.collect_with_retry(url)
+            
+            if not result.get("success"):
+                logger.warning(f"[{platform}] Collection failed: {result.get('error')}")
+            else:
+                logger.info(f"✅ [{platform}] Data collected successfully")
+            
             return result
+            
+        except RuntimeError as e:
+            # Browser initialization failed - this is critical
+            logger.error(f"❌ [{platform}] CRITICAL: {e}")
+            raise  # Re-raise to stop the scan
+            
+        except Exception as e:
+            logger.error(f"❌ [{platform}] Collection error: {e}")
+            return {
+                "success": False,
+                "platform": platform,
+                "url": url,
+                "error": str(e),
+                "error_type": type(e).__name__
+            }
+            
         finally:
             await collector.close_browser()
     
