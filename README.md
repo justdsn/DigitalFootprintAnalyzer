@@ -25,7 +25,6 @@ A **Sri Lanka-focused OSINT (Open Source Intelligence) solution** for privacy aw
 
 - **Backend**: Python 3.10+, FastAPI, Playwright, spaCy, Pydantic, Uvicorn, python-json-logger
 - **Frontend**: React 18, Tailwind CSS, Context API, i18n, React Router
-- **Chrome Extension**: Manifest V3, Service Worker, Content Scripts (optional, see `/extension`)
 - **DevOps**: Docker, Compose, nginx
 
 ---
