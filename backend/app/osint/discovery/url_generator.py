@@ -47,12 +47,25 @@ class URLGenerator:
         if platform not in URLGenerator.PLATFORMS:
             raise ValueError(f"Unsupported platform: {platform}")
         
-        # Special handling for Facebook when username contains spaces (full name)
-        if platform == "facebook" and ' ' in username:
-            # For Facebook, use search URL with full name
-            # https://www.facebook.com/search/people/?q=dhanuka+nanayakkara
-            encoded_name = username.replace(' ', '+')
-            return f"https://www.facebook.com/search/people/?q={encoded_name}"
+        # Special handling when username contains spaces (full name)
+        if ' ' in username:
+            if platform == "facebook":
+                # For Facebook, use search URL with full name
+                encoded_name = username.replace(' ', '+')
+                return f"https://www.facebook.com/search/people/?q={encoded_name}"
+            elif platform == "linkedin":
+                # For LinkedIn, use search URL with full name
+                encoded_name = username.replace(' ', '+')
+                return f"https://www.linkedin.com/search/results/people/?keywords={encoded_name}"
+            elif platform in ["twitter", "x"]:
+                # For X/Twitter, use search URL with full name
+                encoded_name = username.replace(' ', '+')
+                return f"https://x.com/search?q={encoded_name}&f=user"
+            # For Instagram, the orchestrator will use search_and_collect instead
+            # For other platforms with spaces, convert to possible username format
+            else:
+                # Try converting "first last" to "firstlast" or "first.last"
+                username = username.replace(' ', '')
         
         return URLGenerator.PLATFORMS[platform].format(username=username)
     

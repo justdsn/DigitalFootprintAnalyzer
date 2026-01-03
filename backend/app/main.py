@@ -21,6 +21,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from contextlib import asynccontextmanager
 import logging
+import sys
+import asyncio
+import os
+
+# FIX: Set Windows Selector Event Loop Policy for Playwright compatibility
+# This resolves "I/O operation on closed pipe" errors on Windows
+# if sys.platform == "win32":
+#    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
 from app.core.logging_config import setup_structured_logging
 
 

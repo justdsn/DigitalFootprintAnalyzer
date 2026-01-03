@@ -35,7 +35,35 @@ FROM python:3.11-slim
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/root/.local/bin:$PATH"
+    PATH="/root/.local/bin:$PATH" \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
+# Install system dependencies for Playwright
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    # Playwright dependencies
+    libnss3 \
+    libnspr4 \
+    libatk1.0-0 \
+    libatk-bridge2.0-0 \
+    libcups2 \
+    libdrm2 \
+    libdbus-1-3 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxfixes3 \
+    libxrandr2 \
+    libgbm1 \
+    libpango-1.0-0 \
+    libcairo2 \
+    libasound2 \
+    libatspi2.0-0 \
+    libxshmfence1 \
+    # Additional utilities
+    wget \
+    ca-certificates \
+    fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -46,8 +74,14 @@ COPY --from=builder /root/.local /root/.local
 # Copy spaCy model data
 COPY --from=builder /root/.local/lib/python3.11/site-packages/en_core_web_sm /root/.local/lib/python3.11/site-packages/en_core_web_sm
 
+# Install Playwright browsers
+RUN python -m playwright install chromium --with-deps
+
 # Copy application code
 COPY ./app ./app
+
+# Copy OSINT session files (if they exist)
+COPY ./app/osint/sessions/*.json ./app/osint/sessions/ 2>/dev/null || true
 
 # Expose port
 EXPOSE 8000

@@ -83,6 +83,7 @@ class BaseCollector(ABC):
             proxy: Optional proxy server (e.g., 'http://user:pass@host:port')
         """
         self.session_manager = session_manager or SessionManager()
+        self.playwright = None # Store playwright instance to prevent GC
         self.browser: Optional[Browser] = None
         self.context: Optional[BrowserContext] = None
         self.page: Optional[Page] = None
@@ -114,7 +115,7 @@ class BaseCollector(ABC):
             # Load session if exists
             storage_state = self.session_manager.load_session(platform)
             
-            playwright = await async_playwright().start()
+            self.playwright = await async_playwright().start()
             
             # Launch browser with stealthy args
             launch_args = {
@@ -130,7 +131,7 @@ class BaseCollector(ABC):
                 launch_args["proxy"] = {"server": self.proxy}
 
             logger.info(f"[{platform}] Launching Chromium browser...")
-            self.browser = await playwright.chromium.launch(**launch_args)
+            self.browser = await self.playwright.chromium.launch(**launch_args)
 
             # Context options for stealth
             context_args = {
@@ -208,6 +209,9 @@ class BaseCollector(ABC):
                 await self.context.close()
             if self.browser:
                 await self.browser.close()
+            
+            if self.playwright:
+                await self.playwright.stop()
             
             logger.info(f"Browser closed for {self.get_platform_name()}")
             

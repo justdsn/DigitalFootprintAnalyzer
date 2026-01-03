@@ -81,8 +81,9 @@ async def osint_analyze(request: OSINTAnalyzeRequest) -> OSINTAnalyzeResponse:
                 detail="Identifier is required and cannot be empty"
             )
         
-        logger.info(f"🔍 Starting OSINT analysis for: {request.identifier}")
-        
+        clean_identifier = request.identifier.lower().strip()
+        logger.info(f"🔍 Processing identifier: '{clean_identifier}' (Original: '{request.identifier}')")
+
         # Perform analysis
         result = await orchestrator.analyze(
             identifier=request.identifier.strip(),
