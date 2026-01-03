@@ -18,7 +18,7 @@ A **comprehensive OSINT (Open Source Intelligence) platform** for digital footpr
 - **Direct Backend OSINT**: Full name search support with intelligent platform-specific strategies
 
 ### 🎯 Advanced OSINT Capabilities
-- **Automated Social Media Scraping**: Instagram, Facebook, LinkedIn, and X (Twitter)
+- **Automated Social Media Scraping**: Instagram, Facebook and LinkedIn
 - **Intelligent Search Strategy**: 
   - Direct URL navigation for usernames
   - In-app search functionality for full names (Instagram)
@@ -165,7 +165,7 @@ All endpoints are prefixed with `/api/`. Full interactive documentation availabl
 - **Usernames**: Direct URL navigation to profiles
 - **Full Names**: Intelligent search-based collection with:
   - **Instagram**: In-app search with enhanced selectors (10+ fallback strategies including keyboard shortcuts)
-  - **Facebook/LinkedIn/X**: Search URL generation
+  - **Facebook/LinkedIn**: Search URL generation
 - **Session Validation**: Automatic session health checks before scraping
 - **Anti-Bot Protection**: Playwright-stealth, user-agent rotation, randomized delays
 
