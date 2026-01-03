@@ -1,0 +1,52 @@
+{
+  "input": "dhanukananayakkara",
+  "identifier_type": "username",
+  "username": "dhanukananayakkara",
+  "timestamp": "2026-01-02T11:02:26.583358",
+  "profiles_found": [
+    {
+      "platform": "instagram",
+      "name": null,
+      "username": null,
+      "bio": null,
+      "followers": null,
+      "following": null,
+      "location": null,
+      "urls": [],
+      "job_title": null,
+      "metadata": {},
+      "url": "https://www.instagram.com/dhanukananayakkara/",
+      "collection_success": true,
+      "pii": {
+        "emails": [],
+        "phones": [],
+        "urls": [],
+        "social_urls": {},
+        "mentions": []
+      },
+      "ner_entities": {
+        "persons": [],
+        "locations": [],
+        "organizations": []
+      },
+      "analysis": {
+        "username_similarity": 0,
+        "bio_similarity": 0,
+        "pii_exposure_score": 0,
+        "timeline_risk": "medium",
+        "impersonation_score": 0
+      }
+    }
+  ],
+  "correlation": {
+    "correlated": false,
+    "reason": "Not enough profiles for correlation"
+  },
+  "overall_risk": {
+    "exposure": "Low",
+    "impersonation": "Low",
+    "score": 0,
+    "profiles_analyzed": 1
+  },
+  "processing_time_ms": 21310.096
+}

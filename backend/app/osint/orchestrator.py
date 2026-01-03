@@ -112,20 +112,35 @@ class OSINTOrchestrator:
         # Step 2: Extract username from identifier
         username = self._extract_username(identifier, identifier_type)
         
-        # Step 3: Generate profile URLs
+        # Step 3: Determine collection strategy
         if platforms is None:
             platforms = list(self.COLLECTORS.keys())
         
+        # Check if identifier contains spaces (full name) - use search for these
+        needs_search = ' ' in identifier.strip() or identifier_type == "name"
+        
         profile_urls = {}
+        search_platforms = []  # Platforms that should use search instead of direct URL
+        
         for platform in platforms:
             try:
-                url = self.url_generator.generate_url(platform, username)
-                profile_urls[platform] = url
+                # For names with spaces, certain platforms need search-based lookup
+                if needs_search and platform in ["instagram"]:
+                    # Mark for search-based collection
+                    search_platforms.append(platform)
+                    logger.info(f"[{platform}] Will use search for name-based lookup: '{identifier}'")
+                else:
+                    url = self.url_generator.generate_url(platform, username)
+                    profile_urls[platform] = url
             except ValueError:
                 logger.warning(f"Could not generate URL for {platform}")
         
         # Step 4: Collect data from platforms (parallel)
-        collection_results = await self._collect_from_platforms(profile_urls)
+        collection_results = await self._collect_from_platforms(
+            profile_urls, 
+            search_platforms=search_platforms,
+            search_identifier=identifier if needs_search else None
+        )
         
         # Step 5: Parse collected HTML
         parsed_profiles = self._parse_profiles(collection_results)
@@ -153,12 +168,19 @@ class OSINTOrchestrator:
         
         return result
     
-    async def _collect_from_platforms(self, profile_urls: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
+    async def _collect_from_platforms(
+        self, 
+        profile_urls: Dict[str, str],
+        search_platforms: Optional[List[str]] = None,
+        search_identifier: Optional[str] = None
+    ) -> Dict[str, Dict[str, Any]]:
         """
         Collect data from multiple platforms in parallel.
         
         Args:
             profile_urls: Dict mapping platform to URL
+            search_platforms: List of platforms to use search-based collection
+            search_identifier: The original identifier for search-based lookups
         
         Returns:
             Dict mapping platform to collection results
@@ -169,10 +191,20 @@ class OSINTOrchestrator:
         tasks = []
         platform_names = []
         
+        search_platforms = search_platforms or []
+        
+        # Add URL-based collection tasks
         for platform, url in profile_urls.items():
             collector_class = self.COLLECTORS.get(platform)
             if collector_class:
                 tasks.append(self._collect_from_platform(platform, url, collector_class))
+                platform_names.append(platform)
+        
+        # Add search-based collection tasks
+        for platform in search_platforms:
+            collector_class = self.COLLECTORS.get(platform)
+            if collector_class and search_identifier:
+                tasks.append(self._collect_via_search(platform, search_identifier, collector_class))
                 platform_names.append(platform)
         
         # Run collections in parallel
@@ -276,6 +308,71 @@ class OSINTOrchestrator:
                 "url": url,
                 "error": str(e),
                 "error_type": type(e).__name__
+            }
+            
+        finally:
+            await collector.close_browser()
+    
+    async def _collect_via_search(
+        self,
+        platform: str,
+        identifier: str,
+        collector_class: type
+    ) -> Dict[str, Any]:
+        """
+        Collect data from a platform using search functionality.
+        
+        This is used when the identifier is a full name with spaces,
+        where direct URL navigation would fail.
+        
+        Args:
+            platform: Platform name
+            identifier: Full name or search term
+            collector_class: Collector class to use
+        
+        Returns:
+            Collection result
+        
+        Raises:
+            RuntimeError: If browser initialization fails
+        """
+        collector = collector_class(self.session_manager)
+        
+        try:
+            logger.info(f"[{platform}] Starting SEARCH-based collection for '{identifier}'")
+            await collector.initialize_browser()
+            
+            # Use search_and_collect if available
+            if hasattr(collector, 'search_and_collect'):
+                result = await collector.search_and_collect(identifier)
+                
+                if result.get("success"):
+                    logger.info(f"✅ [{platform}] Search found and collected profile")
+                else:
+                    logger.warning(f"[{platform}] Search-based collection failed: {result.get('error')}")
+                
+                return result
+            else:
+                logger.warning(f"[{platform}] Collector does not support search_and_collect")
+                return {
+                    "success": False,
+                    "platform": platform,
+                    "error": "Search not supported for this platform",
+                    "input_identifier": identifier
+                }
+            
+        except RuntimeError as e:
+            logger.error(f"❌ [{platform}] CRITICAL: {e}")
+            raise
+            
+        except Exception as e:
+            logger.error(f"❌ [{platform}] Search collection error: {e}")
+            return {
+                "success": False,
+                "platform": platform,
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "input_identifier": identifier
             }
             
         finally:

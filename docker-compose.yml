@@ -31,10 +31,14 @@ services:
       - DEBUG=False
       - CORS_ORIGINS=http://localhost:3000,http://localhost:8080,http://frontend:3000
       - SPACY_MODEL=en_core_web_sm
+      - OSINT_BROWSER_HEADLESS=true
+      - OSINT_BROWSER_TIMEOUT=30000
     volumes:
       # Mount app directory for development (optional - comment out for production)
       # - ./backend/app:/app/app
       - backend-data:/app/data
+      # Mount OSINT sessions to preserve authentication
+      - ./backend/app/osint/sessions:/app/app/osint/sessions
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
       interval: 30s
