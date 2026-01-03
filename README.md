@@ -10,8 +10,6 @@ A **comprehensive OSINT (Open Source Intelligence) platform** for digital footpr
 
 ---
 
-## ✨ Key Features
-
 ### 🔍 Multi-Mode Scanning
 - **Light Scan**: Fast Google Dorking-based profile discovery (no authentication required)
 - **Deep Scan**: Comprehensive OSINT analysis with authenticated platform scraping via Playwright
